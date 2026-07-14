@@ -1,0 +1,46 @@
+[alias]
+	# status / info
+	s = status -sb
+	st = status
+	# staging
+	a = add
+	aa = add --all
+	# commit
+	c = commit
+	cm = commit -m
+	ca = commit --amend
+	can = commit --amend --no-edit
+	# branches
+	b = branch
+	co = checkout
+	cob = checkout -b
+	sw = switch
+	# diffs
+	d = diff
+	ds = diff --staged
+	# log — the two most useful
+	lg = log --oneline --graph --decorate -20
+	lga = log --oneline --graph --decorate --all
+	last = show --stat HEAD
+	# remote sync
+	p = push
+	pl = pull
+	f = fetch --all --prune
+	# undo — unstage a file, keep changes
+	unstage = reset HEAD --
+	# undo — undo last commit, keep changes staged
+	undo = reset --soft HEAD~1
+	# what changed, who to blame
+	who = shortlog -sne
+
+[init]
+	defaultBranch = main
+
+[pull]
+	ff = only          # refuse surprise merge commits on pull
+
+[push]
+	autoSetupRemote = true   # first push of a new branch sets upstream automatically
+
+[core]
+	autocrlf = input   # good default for WSL+macOS: normalize CRLF on commit
