@@ -33,7 +33,7 @@ fi
 # real directory so per-machine files (local.sh, git 'local') land OUTSIDE
 # the repo instead of inside it.
 # shell must come first so XDG vars exist for anything sourced later.
-for pkg in shell git nvim tmux starship; do
+for pkg in shell git nvim tmux starship claude; do
   [ -d "$pkg" ] || continue
   echo "Stowing $pkg..."
   stow -v --no-folding --target="$HOME" --restow "$pkg"

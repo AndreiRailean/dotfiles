@@ -38,9 +38,15 @@ git/.config/git/config     ->  ~/.config/git/config
 nvim/.config/nvim/          ->  ~/.config/nvim/
 tmux/.config/tmux/          ->  ~/.config/tmux/
 starship/.config/starship.toml -> ~/.config/starship.toml
+claude/.claude/CLAUDE.md   ->  ~/.claude/CLAUDE.md
 ```
 
 Everything is XDG-based (`~/.config`, `~/.local/share`, …).
+
+The `claude` package deploys global agent conventions (e.g. Conventional
+Commits) to `~/.claude/CLAUDE.md`, which Claude Code reads for **every** project
+on the machine. Only that one file is symlinked into `~/.claude`; the rest of
+that directory (state, sessions) is left alone.
 
 ## Shell configuration
 
