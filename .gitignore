@@ -1,0 +1,4 @@
+# Per-machine files created on each host from the *.example templates.
+# They live inside the stow packages but must never be committed.
+shell/.config/shell/local.sh
+git/.config/git/local
