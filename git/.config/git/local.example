@@ -1,0 +1,16 @@
+# Per-machine git settings — identity, signing keys, work-only tweaks.
+#
+# Copy to ~/.config/git/local on each machine; it's gitignored and pulled in
+# by the [include] directive in git/config.
+#
+#   cp local.example ~/.config/git/local
+#
+[user]
+	name = Your Name
+	email = you@example.com
+
+# Optional: sign commits on this machine
+# [user]
+#	signingkey = ...
+# [commit]
+#	gpgsign = true

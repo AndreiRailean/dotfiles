@@ -44,3 +44,22 @@
 
 [core]
 	autocrlf = input   # good default for WSL+macOS: normalize CRLF on commit
+
+# Authenticate GitHub over HTTPS via the gh CLI. Portable: `!gh` resolves on
+# PATH (so it works whether gh is in /usr/bin or /opt/homebrew/bin), and the
+# empty `helper =` first clears any inherited system helper. Not a secret —
+# the token itself lives in gh's own store, not here.
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential
+
+# Per-machine identity/signing lives in an uncommitted 'local' file (see
+# local.example). Path is absolute with ~ expansion, NOT relative: this
+# config file is a symlink into the dotfiles repo, and git resolves a
+# relative include against the symlink's target dir (i.e. inside the repo),
+# which is not where the per-machine file lives.
+[include]
+	path = ~/.config/git/local
