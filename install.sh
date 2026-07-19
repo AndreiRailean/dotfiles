@@ -28,12 +28,38 @@ if ! command -v stow &>/dev/null; then
 fi
 
 # ── Symlink packages into $HOME ──────────────────────────────
-# shell must come first so XDG vars exist for anything sourced later
+# --no-folding: create real directories with per-file symlinks rather than
+# symlinking whole dirs into the repo. This keeps ~/.config/shell (etc.) a
+# real directory so per-machine files (local.sh, git 'local') land OUTSIDE
+# the repo instead of inside it.
+# shell must come first so XDG vars exist for anything sourced later.
 for pkg in shell git nvim tmux starship; do
   [ -d "$pkg" ] || continue
   echo "Stowing $pkg..."
-  stow -v --target="$HOME" --restow "$pkg"
+  stow -v --no-folding --target="$HOME" --restow "$pkg"
 done
+
+# ── Wire the shell entrypoint into each shell's rc ───────────
+# Keeps the distro-provided rc and its defaults; just appends one guarded
+# line that sources our managed init.sh. Idempotent via a marker.
+wire_shell_rc() {
+  local rc="$1" marker="# >>> dotfiles (managed) >>>"
+  [ -e "$rc" ] || return 0
+  if ! grep -qF "$marker" "$rc"; then
+    {
+      printf '\n%s\n' "$marker"
+      printf '%s\n' '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/init.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/init.sh"'
+      printf '%s\n' "# <<< dotfiles (managed) <<<"
+    } >>"$rc"
+    echo "Wired dotfiles loader into $rc"
+  fi
+}
+wire_shell_rc "$HOME/.bashrc"
+wire_shell_rc "$HOME/.zshrc"
+
+# ── Seed per-machine files from templates (never overwrite) ──
+[ -f "$HOME/.config/git/local" ]  || { cp "$DOTFILES_DIR/git/.config/git/local.example"       "$HOME/.config/git/local";  echo "Created ~/.config/git/local — set your name/email"; }
+[ -f "$HOME/.config/shell/local.sh" ] || { cp "$DOTFILES_DIR/shell/.config/shell/local.sh.example" "$HOME/.config/shell/local.sh"; echo "Created ~/.config/shell/local.sh"; }
 
 if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
   echo "Installing win32yank for clipboard bridge..."
@@ -83,7 +109,7 @@ if [ "$IS_WSL" -eq 1 ]; then
   cat <<'EOF'
  You are in WSL. The font must be installed on WINDOWS, not here,
  because Windows Terminal draws the glyphs — not WSL.
-   1. In Windows: download JetBrainsMono Nerd Font from nerdfonts.com
+   1. In Windows: download Monaspace Nerd Font from nerdfonts.com
    2. Select the .ttf files > right-click > Install
    3. Windows Terminal > Settings > your WSL profile > Appearance
       > Font face > "MonaspiceAr Nerd Font Mono"
@@ -99,4 +125,13 @@ elif [ "$OS" = "Darwin" ]; then
 EOF
 fi
 echo "────────────────────────────────────────────────────────"
+
+# ── Drift check ──────────────────────────────────────────────
+# Surface any config that lives next to managed files but isn't tracked
+# (see doctor.sh). Report-only; never blocks the install.
+if [ -x "$DOTFILES_DIR/doctor.sh" ]; then
+  echo ""
+  "$DOTFILES_DIR/doctor.sh" || true
+fi
+
 echo "Done. Restart your terminal (and 'exec \$SHELL') to load Starship."
