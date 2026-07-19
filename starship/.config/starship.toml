@@ -3,6 +3,9 @@
 
 add_newline = true
 command_timeout = 1000
+# The default 30ms scan often times out on WSL's /mnt/c (Windows filesystem);
+# raise it so language modules still render there without the warning.
+scan_timeout = 100
 
 format = """
 $directory\
@@ -19,7 +22,7 @@ $character"""
 [character]
 success_symbol = "[❯](bold green)"
 error_symbol = "[❯](bold red)"
-vim_symbol = "[❮](bold yellow)"
+vimcmd_symbol = "[❮](bold green)"
 
 [directory]
 truncation_length = 3
