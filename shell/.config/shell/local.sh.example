@@ -1,0 +1,11 @@
+# Per-machine shell overrides.
+#
+# Copy this file to  local.sh  (same directory) on each machine. local.sh is
+# gitignored and sourced LAST by init.sh, so it can override anything above.
+#
+#   cp local.sh.example local.sh
+#
+# Examples:
+#   export PATH="/opt/homebrew/bin:$PATH"     # Apple-silicon Homebrew
+#   export AWS_PROFILE="work"
+#   alias work='cd ~/projects/acme'
