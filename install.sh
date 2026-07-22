@@ -81,6 +81,12 @@ if ! command -v bat &>/dev/null && ! command -v batcat &>/dev/null; then
   pkg_install bat || echo "!! bat install failed — install manually: https://github.com/sharkdp/bat"
 fi
 
+# ── eza (a nicer ls) ─────────────────────────────────────────
+if ! command -v eza &>/dev/null; then
+  echo "Installing eza..."
+  pkg_install eza || echo "!! eza install failed — see https://github.com/eza-community/eza/blob/main/INSTALL.md"
+fi
+
 # ── Starship ─────────────────────────────────────────────────
 if ! command -v starship &>/dev/null; then
   echo "Installing Starship..."

@@ -1,15 +1,24 @@
 # Aliases — harmless in non-interactive shells, so defined unconditionally.
 
-# ls colour flag differs: GNU coreutils (Linux/WSL) vs BSD (macOS).
-if ls --color=auto >/dev/null 2>&1; then
-  alias ls='ls --color=auto'
+# ls — prefer eza (icons, git status, tree); fall back to plain ls on bare
+# machines. --icons=auto only draws icons to a terminal, not into pipes.
+if command -v eza >/dev/null 2>&1; then
+  alias ls='eza --group-directories-first --icons=auto'
+  alias ll='eza -l  --git --group-directories-first --icons=auto'
+  alias la='eza -la --git --group-directories-first --icons=auto'
+  alias lt='eza --tree --level=2 --group-directories-first --icons=auto'
+  alias l='eza -1 --group-directories-first --icons=auto'
 else
-  alias ls='ls -G'
+  # colour flag differs: GNU coreutils (Linux/WSL) vs BSD (macOS)
+  if ls --color=auto >/dev/null 2>&1; then
+    alias ls='ls --color=auto'
+  else
+    alias ls='ls -G'
+  fi
+  alias ll='ls -alF'
+  alias la='ls -A'
+  alias l='ls -CF'
 fi
-
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
 
 alias grep='grep --color=auto'
 
