@@ -73,6 +73,14 @@ if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
   fi
 fi
 
+# ── bat (a nicer cat) ────────────────────────────────────────
+# On Debian/Ubuntu the apt package installs the binary as `batcat`; the shell
+# aliases handle either name.
+if ! command -v bat &>/dev/null && ! command -v batcat &>/dev/null; then
+  echo "Installing bat..."
+  pkg_install bat || echo "!! bat install failed — install manually: https://github.com/sharkdp/bat"
+fi
+
 # ── Starship ─────────────────────────────────────────────────
 if ! command -v starship &>/dev/null; then
   echo "Installing Starship..."
