@@ -73,19 +73,21 @@ if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
   fi
 fi
 
-# ── bat (a nicer cat) ────────────────────────────────────────
-# On Debian/Ubuntu the apt package installs the binary as `batcat`; the shell
-# aliases handle either name.
-if ! command -v bat &>/dev/null && ! command -v batcat &>/dev/null; then
-  echo "Installing bat..."
-  pkg_install bat || echo "!! bat install failed — install manually: https://github.com/sharkdp/bat"
-fi
-
-# ── eza (a nicer ls) ─────────────────────────────────────────
-if ! command -v eza &>/dev/null; then
-  echo "Installing eza..."
-  pkg_install eza || echo "!! eza install failed — see https://github.com/eza-community/eza/blob/main/INSTALL.md"
-fi
+# ── CLI tools (best-effort; each is optional) ────────────────
+# ensure_tool <package> <cmd>...: install <package> unless one of <cmd> is
+# already on PATH. (bat is `batcat` on Debian/Ubuntu, `bat` elsewhere.)
+ensure_tool() {
+  local pkg="$1"; shift
+  local c
+  for c in "$@"; do command -v "$c" &>/dev/null && return 0; done
+  echo "Installing $pkg..."
+  pkg_install "$pkg" || echo "!! $pkg install failed — install it manually"
+}
+ensure_tool bat bat batcat     # cat with syntax highlighting
+ensure_tool eza eza            # nicer ls
+ensure_tool ripgrep rg         # fast recursive grep
+ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
+ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
 
 # ── Starship ─────────────────────────────────────────────────
 if ! command -v starship &>/dev/null; then
