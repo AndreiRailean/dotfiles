@@ -30,11 +30,20 @@ if command -v fzf >/dev/null 2>&1 && { [ "$_sh" = bash ] || [ "$_sh" = zsh ]; };
     done
     unset _f
   fi
-  # Let fzf list files via ripgrep (fast, respects .gitignore) when available.
-  if command -v rg >/dev/null 2>&1; then
+  # File/dir lists for fzf: prefer fd (fdfind on Debian) — it also powers the
+  # Alt-C directory jump — else fall back to ripgrep for the file list.
+  if command -v fd >/dev/null 2>&1; then _fd=fd
+  elif command -v fdfind >/dev/null 2>&1; then _fd=fdfind
+  else _fd=""; fi
+  if [ -n "$_fd" ]; then
+    export FZF_DEFAULT_COMMAND="$_fd --type f --hidden --exclude .git"
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    export FZF_ALT_C_COMMAND="$_fd --type d --hidden --exclude .git"
+  elif command -v rg >/dev/null 2>&1; then
     export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git/*"'
     export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
   fi
+  unset _fd
 fi
 
 # direnv — per-directory environments loaded from .envrc

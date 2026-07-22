@@ -88,6 +88,36 @@ ensure_tool eza eza            # nicer ls
 ensure_tool ripgrep rg         # fast recursive grep
 ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
 ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
+# fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
+if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
+
+# ── 1Password CLI (op) ───────────────────────────────────────
+# Not in distro repos; use 1Password's own channels. See
+# https://developer.1password.com/docs/cli/get-started/
+if ! command -v op &>/dev/null; then
+  echo "Installing 1Password CLI (op)..."
+  if command -v brew &>/dev/null; then
+    brew install 1password-cli || echo "!! op install via brew failed"
+  elif command -v apt &>/dev/null; then
+    if curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+         | sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg \
+       && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+         | sudo tee /etc/apt/sources.list.d/1password.list >/dev/null \
+       && sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22/ \
+       && curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol \
+         | sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol >/dev/null \
+       && sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 \
+       && curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+         | sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg \
+       && sudo apt update && sudo apt install -y 1password-cli; then
+      :
+    else
+      echo "!! op install failed — see https://developer.1password.com/docs/cli/get-started/"
+    fi
+  else
+    echo "!! Install 1Password CLI manually: https://developer.1password.com/docs/cli/get-started/"
+  fi
+fi
 
 # ── Starship ─────────────────────────────────────────────────
 if ! command -v starship &>/dev/null; then

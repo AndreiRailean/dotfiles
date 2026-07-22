@@ -33,6 +33,12 @@ elif command -v bat >/dev/null 2>&1; then
   alias cat='bat --paging=never'
 fi
 
+# fd — friendlier find. Debian/Ubuntu ships the binary as `fdfind`, so alias
+# `fd` to it there (elsewhere fd is already the real command).
+if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
+  alias fd='fdfind'
+fi
+
 # cd shortcuts
 alias ..='cd ..'
 alias ...='cd ../..'
