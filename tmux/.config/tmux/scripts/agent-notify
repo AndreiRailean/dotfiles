@@ -35,9 +35,9 @@ if [ "$state" != "working" ]; then
     needs-input) msg="Claude needs your input" ;;
     done)        msg="Claude finished" ;;
   esac
-  printf '\a' > /dev/tty 2>/dev/null || true
+  printf '\a' 2>/dev/null > /dev/tty || true
   # OSC 9, DCS-wrapped so tmux allow-passthrough forwards it (inner ESC doubled).
-  printf '\033Ptmux;\033\033]9;%s\007\033\\' "$msg" > /dev/tty 2>/dev/null || true
+  printf '\033Ptmux;\033\033]9;%s\007\033\\' "$msg" 2>/dev/null > /dev/tty || true
 fi
 
 exit 0
