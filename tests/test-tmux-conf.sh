@@ -21,4 +21,9 @@ keys="$(tmux -L "$L" list-keys 2>/dev/null)"
 assert_contains "$keys" "M-h" "M-h pane-nav bound"
 assert_contains "$keys" "M-L" "M-L next-window bound"
 assert_contains "$keys" "synchronize-panes" "sync-panes toggle bound"
+
+assert_contains "$(tmux -L "$L" show -gwv window-status-format 2>/dev/null)" "@agent_state" "window list renders @agent_state chip"
+assert_contains "$(tmux -L "$L" show -gv status-left 2>/dev/null)" "#S" "status-left shows session name"
+assert_contains "$(tmux -L "$L" show -gv status-right 2>/dev/null)" "agent-summary" "status-right calls agent-summary"
+assert_contains "$(tmux -L "$L" show-hooks -gw 2>/dev/null)" "pane-focus-in" "pane-focus-in clear hook is set"
 finish
