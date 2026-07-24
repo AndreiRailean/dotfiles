@@ -1,0 +1,43 @@
+#!/bin/sh
+# agent-notify — Claude Code hook handler. Reads hook JSON on stdin and flags
+# the agent's OWN tmux window with an @agent_state chip; rings the terminal
+# bell + emits an OSC 9 desktop notification for attention states. Always
+# exits 0 and is a no-op outside tmux, so it can never fail a Claude turn.
+
+[ -n "$TMUX" ] && [ -n "$TMUX_PANE" ] || exit 0
+command -v tmux >/dev/null 2>&1 || exit 0
+
+input="$(cat 2>/dev/null)"
+event=""
+if command -v jq >/dev/null 2>&1; then
+  event="$(printf '%s' "$input" | jq -r '.hook_event_name // empty' 2>/dev/null)"
+fi
+
+case "$event" in
+  UserPromptSubmit)   state="working" ;;
+  Notification)       state="needs-input" ;;
+  Stop|SubagentStop)  state="done" ;;
+  *) exit 0 ;;
+esac
+
+case "$state" in
+  working)     chip='#[fg=colour232,bg=colour220,bold] ● working #[default]' ;;
+  needs-input) chip='#[fg=colour232,bg=colour203,bold] ▲ input #[default]' ;;
+  done)        chip='#[fg=colour232,bg=colour76,bold] ✔ done #[default]' ;;
+esac
+
+# Target the agent's own window explicitly via its pane — never the active one.
+tmux set-window-option -t "$TMUX_PANE" @agent_state "$chip" 2>/dev/null
+
+# Attention signal only for needs-input/done (not on every prompt submit).
+if [ "$state" != "working" ]; then
+  case "$state" in
+    needs-input) msg="Claude needs your input" ;;
+    done)        msg="Claude finished" ;;
+  esac
+  printf '\a' > /dev/tty 2>/dev/null || true
+  # OSC 9, DCS-wrapped so tmux allow-passthrough forwards it (inner ESC doubled).
+  printf '\033Ptmux;\033\033]9;%s\007\033\\' "$msg" > /dev/tty 2>/dev/null || true
+fi
+
+exit 0
