@@ -28,7 +28,7 @@ else
   base='{}'
 fi
 
-tmp="$(mktemp)"
+tmp="$(mktemp "${settings}.XXXXXX")"
 printf '%s' "$base" | jq --arg cmd "$cmd" '
   def ensure($ev; $group):
     .hooks[$ev] = ((.hooks[$ev] // [])
