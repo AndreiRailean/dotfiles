@@ -1,0 +1,22 @@
+#!/bin/sh
+# agent-summary — compact status-right aggregate of agent states across all
+# windows on the server, e.g. "▲2 ●1". Prints nothing when none are flagged.
+command -v tmux >/dev/null 2>&1 || exit 0
+states="$(tmux list-windows -a -F '#{@agent_state}' 2>/dev/null)" || exit 0
+
+icount=0; wcount=0; dcount=0
+IFS='
+'
+for s in $states; do
+  case "$s" in
+    *input*)   icount=$((icount + 1)) ;;
+    *working*) wcount=$((wcount + 1)) ;;
+    *done*)    dcount=$((dcount + 1)) ;;
+  esac
+done
+
+out=""
+[ "$icount" -gt 0 ] && out="$out#[fg=colour203,bold]▲$icount #[default]"
+[ "$wcount" -gt 0 ] && out="$out#[fg=colour220]●$wcount #[default]"
+[ "$dcount" -gt 0 ] && out="$out#[fg=colour76]✔$dcount #[default]"
+printf '%s' "$out"
