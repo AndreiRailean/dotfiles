@@ -87,6 +87,7 @@ ensure_tool bat bat batcat     # cat with syntax highlighting
 ensure_tool eza eza            # nicer ls
 ensure_tool ripgrep rg         # fast recursive grep
 ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
+ensure_tool jq jq             # JSON processor (Claude hook merge, tooling)
 ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
 # fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
 if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
@@ -171,6 +172,19 @@ elif [ "$OS" = "Darwin" ]; then
 EOF
 fi
 echo "────────────────────────────────────────────────────────"
+
+# ── Claude Code agent hooks (tmux notifications) ─────────────
+# Idempotent jq-merge into ~/.claude/settings.json (NOT symlinked — Claude
+# rewrites that file). Safe to re-run; see claude-hooks-merge.sh.
+if command -v jq &>/dev/null; then
+  if "$DOTFILES_DIR/claude-hooks-merge.sh" "$HOME/.claude/settings.json" "$XDG_CONFIG_HOME/tmux/scripts"; then
+    echo "Wired Claude Code agent hooks into ~/.claude/settings.json"
+  else
+    echo "!! Claude hook merge failed — see README to add hooks manually"
+  fi
+else
+  echo "!! jq missing — skipped Claude hook merge (see README)"
+fi
 
 # ── Drift check ──────────────────────────────────────────────
 # Surface any config that lives next to managed files but isn't tracked
