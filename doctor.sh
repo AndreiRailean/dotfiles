@@ -22,6 +22,12 @@ PACKAGES="shell git nvim tmux starship claude"
 ADOPT=0
 [ "${1:-}" = "--adopt" ] && ADOPT=1
 
+# ── AI-agent tmux integration health (report-only; never affects drift) ──
+if [ "$ADOPT" -eq 0 ] && [ -x "$DOTFILES_DIR/tmux/.config/tmux/scripts/agent-doctor" ]; then
+  "$DOTFILES_DIR/tmux/.config/tmux/scripts/agent-doctor" || true
+  echo
+fi
+
 untracked=()   # "target|pkg|rel"
 broken=()      # dangling symlinks
 missing=()     # repo files not linked into $HOME

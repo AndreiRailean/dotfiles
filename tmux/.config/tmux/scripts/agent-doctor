@@ -1,0 +1,31 @@
+#!/bin/sh
+# agent-doctor — report-only health check for the AI-agent tmux integration.
+# Prints ✓/▲ lines; always exits 0.
+settings="${AGENT_DOCTOR_SETTINGS:-$HOME/.claude/settings.json}"
+scripts="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/scripts"
+
+echo "AI-agent tmux integration:"
+
+if command -v tmux >/dev/null 2>&1 && tmux info >/dev/null 2>&1; then
+  [ "$(tmux show -gv  allow-passthrough 2>/dev/null)" = "on" ] && echo "  ✓ allow-passthrough on" || echo "  ▲ allow-passthrough not on (reload tmux)"
+  [ "$(tmux show -sv  extended-keys 2>/dev/null)" = "on" ]     && echo "  ✓ extended-keys on"      || echo "  ▲ extended-keys not on"
+  [ "$(tmux show -gwv monitor-bell 2>/dev/null)" = "on" ]      && echo "  ✓ monitor-bell on"       || echo "  ▲ monitor-bell not on"
+else
+  echo "  … no tmux server running; start tmux to check live options"
+fi
+
+for s in agent-notify agent-clear agent-summary; do
+  if [ -x "$scripts/$s" ]; then echo "  ✓ $s executable"; else echo "  ▲ $s missing/not executable ($scripts/$s)"; fi
+done
+
+if command -v jq >/dev/null 2>&1; then
+  echo "  ✓ jq present"
+  if [ -f "$settings" ] && jq -e '.hooks.Stop and .hooks.Notification and .hooks.UserPromptSubmit' "$settings" >/dev/null 2>&1; then
+    echo "  ✓ Claude hooks present in $settings"
+  else
+    echo "  ▲ Claude hooks not found in $settings (re-run install.sh)"
+  fi
+else
+  echo "  ▲ jq not present (needed for hook install)"
+fi
+exit 0
