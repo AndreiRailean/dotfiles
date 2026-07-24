@@ -125,3 +125,55 @@ so the workflow there is to notice the new tool and add it as a package
   Because `~/.config/git/config` is a symlink into this repo, git resolves a
   *relative* include against the symlink's target (inside the repo) — not where
   the per-machine file actually lives.
+
+## tmux + AI agents
+
+The tmux config is tuned for running several Claude Code sessions in parallel
+and seeing, at a glance, which one needs you.
+
+**Attention chips.** Each window shows a colored chip when its agent changes
+state, driven by Claude Code hooks:
+
+| Chip        | Meaning                          |
+|-------------|----------------------------------|
+| `● working` | you submitted a prompt (yellow)  |
+| `▲ input`   | Claude is waiting on you (red)   |
+| `✔ done`    | Claude finished a turn (green)   |
+
+`▲ input` / `✔ done` also ring the terminal bell and emit an OSC 9 desktop
+notification (your terminal shows a native toast). Chips clear when you focus
+the window. The right side of the status bar aggregates across windows, e.g.
+`▲2 ●1`.
+
+**How it's wired.** Three Claude hooks (`UserPromptSubmit`, `Notification`,
+`Stop`) call `~/.config/tmux/scripts/agent-notify`, which sets a per-window
+`@agent_state` tmux option. `install.sh` merges these hooks into
+`~/.claude/settings.json` with `jq` (idempotent; backs up first; never
+overrides your own `preferredNotifChannel` or other hooks). That file is **not**
+symlinked because Claude rewrites it.
+
+Add the hooks manually if you skipped the merge — put this in
+`~/.claude/settings.json` (adjust the path):
+
+    {
+      "preferredNotifChannel": "terminal_bell",
+      "hooks": {
+        "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.config/tmux/scripts/agent-notify" }] }],
+        "Notification":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.config/tmux/scripts/agent-notify" }] }],
+        "Stop":             [{ "hooks": [{ "type": "command", "command": "~/.config/tmux/scripts/agent-notify" }] }]
+      }
+    }
+
+**Keys** (prefix is `C-a`): `M-h/j/k/l` move between panes, `M-H`/`M-L`
+previous/next window, `prefix S` toggles `synchronize-panes` (type into every
+pane at once), `prefix Enter` opens a scratch popup, `prefix g` opens the
+session tree.
+
+**Limitation.** `@agent_state` is per-window, so two agents in one window share
+one chip — run roughly one agent per window/session for clean signals.
+
+**Health check.** `./doctor.sh` prints an "AI-agent tmux integration" section;
+`~/.config/tmux/scripts/agent-doctor` runs it standalone.
+
+_Phase 2 (planned): an fzf `sessionizer` popup (`prefix f`) and a git-`worktree`
+launcher (`prefix W`)._

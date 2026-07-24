@@ -1,0 +1,11 @@
+#!/bin/sh
+# agent-clear <window_id> <current @agent_state> — clear the chip on focus,
+# but only for attention states (leave a "working" chip in place).
+win="$1"
+state="$2"
+[ -n "$win" ] || exit 0
+case "$state" in
+  ""|*working*) : ;;                                   # empty or working → keep
+  *) tmux set-window-option -t "$win" @agent_state "" 2>/dev/null ;;
+esac
+exit 0
