@@ -2,3 +2,6 @@
 # They live inside the stow packages but must never be committed.
 shell/.config/shell/local.sh
 git/.config/git/local
+
+# Subagent-driven-development scratch (ledger, briefs, review packages).
+.superpowers/
