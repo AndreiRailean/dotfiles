@@ -177,3 +177,33 @@ one chip — run roughly one agent per window/session for clean signals.
 
 _Phase 2 (planned): an fzf `sessionizer` popup (`prefix f`) and a git-`worktree`
 launcher (`prefix W`)._
+
+## herdr
+
+[herdr](https://herdr.dev) is an agent-aware, tmux-style terminal multiplexer
+purpose-built for running multiple AI coding agents at once — it gives each
+agent a real persistent pane and surfaces working/blocked/done/idle state
+natively (what the tmux setup above approximates with hooks). It's the
+agent-focused driver; **tmux stays** for plain and SSH-only boxes.
+
+`install.sh` installs it via the official installer
+(`curl -fsSL https://herdr.dev/install.sh | sh`; on macOS you can also
+`brew install herdr`). It's a static, self-updating binary — `herdr update`
+keeps it current, so there's no version pin here.
+
+**Managed config** lives at `~/.config/herdr/config.toml` (a normal Stow
+package). It's deliberately minimal — herdr auto-detects agents with zero
+config — pinning only:
+
+- `prefix = "ctrl+a"` to match the tmux prefix,
+- the `tokyo-night` theme,
+- `onboarding = false`.
+
+Run `herdr --default-config` to see everything else you could set, and
+`herdr server reload-config` (or `prefix+shift+r`) after editing.
+
+**Only `config.toml` is tracked.** herdr also writes runtime state into that
+same directory (`herdr*.sock`, `herdr*.log`, `session.json`, `.plugins.lock`);
+those are git-ignored so they're never committed and `doctor.sh` doesn't flag
+them as drift. If a machine already has a real `config.toml` there, `stow` will
+conflict — adopt it with `./doctor.sh --adopt` or remove it first.
