@@ -28,6 +28,21 @@ if [ "$ADOPT" -eq 0 ] && [ -x "$DOTFILES_DIR/tmux/.config/tmux/scripts/agent-doc
   echo
 fi
 
+# ── Editor health (report-only; never affects drift) ────────
+# The vim -> nvim aliases only apply to interactive shells. If the `vim` binary
+# itself still resolves to classic vim, scripts and sudo get the wrong editor.
+if [ "$ADOPT" -eq 0 ] && command -v nvim >/dev/null 2>&1 && command -v vim >/dev/null 2>&1; then
+  if ! vim --version 2>/dev/null | head -1 | grep -qi nvim; then
+    echo "▲ The 'vim' binary is classic vim, not neovim (aliases only cover interactive shells)."
+    if command -v update-alternatives >/dev/null 2>&1; then
+      echo "    fix: re-run ./install.sh, or: sudo update-alternatives --set vim \"\$(command -v nvim)\""
+    else
+      echo "    fix: point vim at $(command -v nvim) however this OS manages it"
+    fi
+    echo
+  fi
+fi
+
 untracked=()   # "target|pkg|rel"
 broken=()      # dangling symlinks
 missing=()     # repo files not linked into $HOME

@@ -92,6 +92,30 @@ ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
 # fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
 if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
 
+# ── Editor alternatives (Debian/Ubuntu) ──────────────────────
+# Debian's neovim package registers nvim in the vim/vi/editor alternative
+# groups at the SAME priority as vim.basic, so "auto" mode resolves by install
+# order — which is why `vim` keeps opening the preinstalled vim on a box that
+# had it first. Pin the vim-named commands to nvim system-wide; the aliases in
+# aliases.sh only cover interactive shells.
+#
+# Only groups where nvim is already a registered candidate are touched, so this
+# is a no-op on macOS/Arch (no update-alternatives) and on machines where nvim
+# came from a tarball rather than a package. 'editor' is deliberately left
+# alone — that's the distro-wide default for other users' tools, and our own
+# shells already get nvim via EDITOR/VISUAL.
+if command -v update-alternatives &>/dev/null && command -v nvim &>/dev/null; then
+  for group in vim vi view ex vimdiff rvim rview; do
+    cand="$(update-alternatives --list "$group" 2>/dev/null | grep -E '/nvim$' | head -1)" || true
+    [ -n "$cand" ] || continue     # nvim not a candidate for this group
+    current="$(update-alternatives --query "$group" 2>/dev/null | awk '/^Value:/{print $2}')" || true
+    [ "$current" = "$cand" ] && continue
+    echo "Pointing '$group' at $cand (was ${current:-unset})..."
+    sudo update-alternatives --set "$group" "$cand" >/dev/null \
+      || echo "!! could not set $group -> nvim (run: sudo update-alternatives --set $group $cand)"
+  done
+fi
+
 # ── 1Password CLI (op) ───────────────────────────────────────
 # Not in distro repos; use 1Password's own channels. See
 # https://developer.1password.com/docs/cli/get-started/

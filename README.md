@@ -58,7 +58,7 @@ source, so there's a single source of truth across shells:
   └─ ~/.config/shell/init.sh   # entrypoint — sources the fragments below
        ├─ env.sh     # XDG vars, EDITOR/VISUAL/PAGER
        ├─ path.sh     # idempotent PATH building (path_prepend)
-       ├─ aliases.sh  # ls/grep/git/cd shortcuts
+       ├─ aliases.sh  # ls/grep/git/cd shortcuts, vim -> nvim
        ├─ tools.sh    # fnm, deno (shell-detected)
        ├─ prompt.sh   # starship (shell-detected, interactive only)
        └─ local.sh    # per-machine overrides (gitignored)
@@ -71,6 +71,24 @@ the fragment by checking `$BASH_VERSION` / `$ZSH_VERSION` at runtime.
 rc (with its own defaults) and just sources the managed `init.sh`. This avoids
 clobbering OS defaults and keeps SSH-only boxes low-risk. Promoting them into a
 managed package later is a non-breaking change — the fragments stay the same.
+
+### `vim` → neovim
+
+Most distros ship a preinstalled vim, and on Debian/Ubuntu the neovim package
+registers `nvim` in the `vim`/`vi` alternative groups at the *same priority* as
+`vim.basic` — so "auto" mode resolves by install order and `vim` keeps opening
+classic vim. Three layers cover it:
+
+| Layer                                  | Covers                                   |
+| -------------------------------------- | ---------------------------------------- |
+| `EDITOR`/`VISUAL` (`env.sh`)           | git, `crontab -e`, anything reading them |
+| `vim`/`vi`/`vimdiff` aliases (`aliases.sh`) | what you type at an interactive prompt |
+| `update-alternatives --set` (`install.sh`) | the binary itself — scripts, `sudo vim` |
+
+`install.sh` pins the alternative on every machine (idempotent, needs `sudo`,
+skipped where nvim isn't a registered candidate — macOS, Arch, tarball
+installs). `doctor.sh` warns if the `vim` binary is still classic vim. The
+distro-wide `editor` group is left alone on purpose.
 
 ## Per-machine settings
 
