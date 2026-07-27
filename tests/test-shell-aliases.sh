@@ -44,6 +44,22 @@ grep -Eq 'for group in vim vi ' "$REPO/install.sh" \
 grep -q "for group in .*\beditor\b" "$REPO/install.sh" \
   && fail "install.sh leaves the 'editor' group alone" || pass "install.sh leaves the 'editor' group alone"
 
+# install.sh installs neovim itself (Ubuntu: official PPA, stable channel)
+grep -q 'ppa:neovim-ppa/stable' "$REPO/install.sh" \
+  && pass "install.sh adds the neovim stable PPA" || fail "install.sh adds the neovim stable PPA"
+grep -q 'if ! command -v nvim' "$REPO/install.sh" \
+  && pass "install.sh skips nvim when present" || fail "install.sh skips nvim when present"
+
+# Order matters: nvim must be installed BEFORE the alternatives are pinned,
+# or there is no nvim candidate to pin to on a fresh machine.
+n_install="$(grep -n 'Installing neovim' "$REPO/install.sh" | cut -d: -f1 | head -1)"
+n_pin="$(grep -n 'for group in vim vi ' "$REPO/install.sh" | cut -d: -f1 | head -1)"
+if [ -n "$n_install" ] && [ -n "$n_pin" ] && [ "$n_install" -lt "$n_pin" ]; then
+  pass "nvim install precedes alternatives pinning"
+else
+  fail "nvim install precedes alternatives pinning (install@$n_install pin@$n_pin)"
+fi
+
 # doctor.sh warns when the vim binary is still classic vim
 grep -q 'classic vim, not neovim' "$REPO/doctor.sh" \
   && pass "doctor.sh reports vim/nvim mismatch" || fail "doctor.sh reports vim/nvim mismatch"

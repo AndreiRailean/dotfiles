@@ -92,6 +92,33 @@ ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
 # fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
 if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
 
+# ── Neovim ───────────────────────────────────────────────────
+# nvim is EDITOR/VISUAL and has a stowed config, so a fresh machine needs it.
+# Distro repos lag (Ubuntu is a release or two behind; Debian stable much
+# more), so on Ubuntu add the official PPA's stable channel first — tagged
+# releases, and its .deb registers nvim with update-alternatives, which the
+# pinning step below depends on. brew and pacman already ship current builds.
+#
+# Skipped entirely when nvim is already installed, so a machine deliberately
+# tracking the unstable/nightly PPA keeps it.
+if ! command -v nvim &>/dev/null; then
+  echo "Installing neovim..."
+  nvim_ppa=0
+  if command -v apt &>/dev/null; then
+    # PPAs are Ubuntu-only — Debian and other apt distros get the distro pkg.
+    distro="$( . /etc/os-release 2>/dev/null && printf '%s %s' "${ID:-}" "${ID_LIKE:-}" )" || distro=""
+    case "$distro" in *ubuntu*) nvim_ppa=1 ;; esac
+  fi
+  if [ "$nvim_ppa" -eq 1 ]; then
+    sudo apt install -y software-properties-common \
+      && sudo add-apt-repository -y ppa:neovim-ppa/stable \
+      && sudo apt update \
+      || echo "!! neovim PPA setup failed — falling back to the distro package"
+  fi
+  pkg_install neovim \
+    || echo "!! neovim install failed — see https://github.com/neovim/neovim/blob/master/INSTALL.md"
+fi
+
 # ── Editor alternatives (Debian/Ubuntu) ──────────────────────
 # Debian's neovim package registers nvim in the vim/vi/editor alternative
 # groups at the SAME priority as vim.basic, so "auto" mode resolves by install

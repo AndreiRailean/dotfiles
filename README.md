@@ -90,6 +90,14 @@ skipped where nvim isn't a registered candidate — macOS, Arch, tarball
 installs). `doctor.sh` warns if the `vim` binary is still classic vim. The
 distro-wide `editor` group is left alone on purpose.
 
+`install.sh` also installs neovim when it's missing: on Ubuntu (and Mint/Pop)
+from the official `ppa:neovim-ppa/stable`, because the distro package trails by
+a release or two and the PPA's `.deb` is what registers nvim with
+`update-alternatives`. Debian and other apt distros get the distro package;
+brew and pacman already ship current builds. If nvim is *already* installed the
+whole step is skipped, so a machine deliberately tracking the nightly
+`unstable` PPA keeps it.
+
 ## Per-machine settings
 
 Machine-local, secret, or identity settings live in files seeded from templates
