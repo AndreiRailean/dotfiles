@@ -33,7 +33,7 @@ fi
 # real directory so per-machine files (local.sh, git 'local') land OUTSIDE
 # the repo instead of inside it.
 # shell must come first so XDG vars exist for anything sourced later.
-for pkg in shell git nvim tmux starship claude; do
+for pkg in shell git nvim tmux starship herdr claude; do
   [ -d "$pkg" ] || continue
   echo "Stowing $pkg..."
   stow -v --no-folding --target="$HOME" --restow "$pkg"
@@ -127,6 +127,16 @@ if ! command -v starship &>/dev/null; then
   curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" \
     || pkg_install starship \
     || echo "!! Starship install failed — install manually: https://starship.rs/installing"
+fi
+
+# ── herdr (agent-aware terminal multiplexer) ─────────────────
+# Static, self-updating binary (`herdr update`); not in distro repos. The
+# official installer covers Linux + macOS and drops it in ~/.local/bin. On
+# macOS you can alternatively `brew install herdr` (see https://herdr.dev).
+if ! command -v herdr &>/dev/null; then
+  echo "Installing herdr..."
+  curl -fsSL https://herdr.dev/install.sh | sh \
+    || echo "!! herdr install failed — install manually: https://herdr.dev"
 fi
 
 # ── Nerd Font (best-effort; see note printed at end) ─────────

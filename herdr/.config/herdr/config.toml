@@ -1,0 +1,20 @@
+# herdr configuration — managed by dotfiles.
+#
+# Only a few settings are pinned here; everything else uses herdr's defaults
+# (it auto-detects agents with zero config). Run `herdr --default-config` to
+# see the full set of options.
+#
+# NOTE: ~/.config/herdr/ also holds runtime state (herdr*.sock, herdr*.log,
+# session.json, .plugins.lock). Those are git-ignored — only this file is
+# tracked/stowed.
+
+# Skip the first-run onboarding (we set our preferences below).
+onboarding = false
+
+[theme]
+name = "tokyo-night"
+
+[keys]
+# Match the tmux prefix (Ctrl-a) for muscle memory. Everything else keeps
+# herdr's default keymap (pane nav prefix+h/j/k/l, splits prefix+v / prefix+-).
+prefix = "ctrl+a"
