@@ -39,6 +39,16 @@ if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
   alias fd='fdfind'
 fi
 
+# nvim — most distros ship a preinstalled vim, so `vim` keeps resolving to it
+# even after neovim is installed. Point the vim names at nvim whenever it's
+# there; on a machine without nvim these are skipped and real vim still works.
+# EDITOR/VISUAL (env.sh) cover non-interactive callers like git.
+if command -v nvim >/dev/null 2>&1; then
+  alias vim='nvim'
+  alias vi='nvim'
+  alias vimdiff='nvim -d'
+fi
+
 # cd shortcuts
 alias ..='cd ..'
 alias ...='cd ../..'
