@@ -44,6 +44,23 @@
 
 [core]
 	autocrlf = input   # good default for WSL+macOS: normalize CRLF on commit
+	# delta — syntax-highlighted diffs with line numbers. The `command -v`
+	# guard is load-bearing: git treats a missing pager as FATAL ("unable to
+	# execute pager"), and this file is shared with machines that don't have
+	# delta yet, so plain `pager = delta` would break git there. core.pager is
+	# run through the shell, so the || fallback works.
+	pager = command -v delta >/dev/null 2>&1 && delta || less
+
+[interactive]
+	# same guard: `git add -p` etc. fall back to unfiltered output
+	diffFilter = command -v delta >/dev/null 2>&1 && delta --color-only || cat
+
+[delta]
+	navigate = true      # n / N jump between files in a diff
+	line-numbers = true
+
+[diff]
+	colorMoved = default   # distinguish moved lines from added/removed
 
 # Authenticate GitHub over HTTPS via the gh CLI. Portable: `!gh` resolves on
 # PATH (so it works whether gh is in /usr/bin or /opt/homebrew/bin), and the

@@ -98,6 +98,38 @@ brew and pacman already ship current builds. If nvim is *already* installed the
 whole step is skipped, so a machine deliberately tracking the nightly
 `unstable` PPA keeps it.
 
+### Paging: `less` → bat, git diffs → delta
+
+`bat` provides the highlighting, with the split chosen so each name keeps the
+behaviour you expect:
+
+| Command | Behaviour                                                       |
+| ------- | --------------------------------------------------------------- |
+| `cat`   | `--paging=never` — a true drop-in for `cat`, safe in pipelines    |
+| `bat`   | `--paging=auto` — pages only when output doesn't fit             |
+| `less`  | `--paging=always` — always pages, like real `less`               |
+
+bat runs `less` underneath, so `/`, `g`/`G` and `q` behave normally. It does
+*not* understand less's own flags (`+F` to follow, `-N`, `-S`) — use
+`command less` for those.
+
+Git diffs go through [delta](https://github.com/dandavison/delta) (`git-delta`
+on apt/brew/pacman — *not* `delta`, which on Debian/Ubuntu is an unrelated
+2006-era binary-diff tool). `core.pager` is written as a guarded expression:
+
+```gitconfig
+pager = command -v delta >/dev/null 2>&1 && delta || less
+```
+
+The guard is load-bearing, not decoration — git treats a missing pager as
+**fatal** (`unable to execute pager`), so a bare `pager = delta` would break
+git outright on any machine that hasn't installed it yet. `core.pager` is run
+through a shell, so the `||` fallback works. `interactive.diffFilter` is
+guarded the same way, falling back to `cat`.
+
+`$PAGER` itself stays plain `less`, so non-interactive callers (`man`,
+`systemctl`, …) are unaffected.
+
 ## Per-machine settings
 
 Machine-local, secret, or identity settings live in files seeded from templates

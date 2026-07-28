@@ -89,6 +89,10 @@ ensure_tool ripgrep rg         # fast recursive grep
 ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
 ensure_tool jq jq             # JSON processor (Claude hook merge, tooling)
 ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
+# delta (syntax-highlighted git diffs) — the package is git-delta on apt, brew
+# AND pacman. Not `delta`: on Debian/Ubuntu that name belongs to an unrelated
+# 2006-era binary-diff tool.
+ensure_tool git-delta delta
 # fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
 if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
 
