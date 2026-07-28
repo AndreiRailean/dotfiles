@@ -26,11 +26,18 @@ alias grep='grep --color=auto'
 # `batcat`; alias `bat` to it there so `bat` works everywhere. Use cat as a
 # drop-in (--paging=never keeps cat's dump-and-exit behaviour). When piped,
 # bat auto-disables decorations, so `cat file | ...` still behaves like cat.
+#
+# `less` is aliased to bat too, to keep the muscle memory — --paging=always so
+# short files still open in the pager the way real less does. bat runs less
+# underneath, so /, g/G and q all still work. It does NOT understand less's own
+# flags (+F to follow, -N, -S): use `command less` for those.
 if command -v batcat >/dev/null 2>&1; then
   alias bat='batcat'
   alias cat='batcat --paging=never'
+  alias less='batcat --paging=always'
 elif command -v bat >/dev/null 2>&1; then
   alias cat='bat --paging=never'
+  alias less='bat --paging=always'
 fi
 
 # fd — friendlier find. Debian/Ubuntu ships the binary as `fdfind`, so alias

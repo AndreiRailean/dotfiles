@@ -30,6 +30,14 @@ assert_contains "$out" "alias vim='nvim'" "vim -> nvim"
 assert_contains "$out" "alias vi='nvim'" "vi -> nvim"
 assert_contains "$out" "alias vimdiff='nvim -d'" "vimdiff -> nvim -d"
 
+# ── bat pagers: less keeps the muscle memory, cat stays a real drop-in ──
+printf '#!/bin/sh\nexit 0\n' >"$BIN/batcat"
+chmod +x "$BIN/batcat"
+out="$(alias_table)"
+assert_contains "$out" "alias less='batcat --paging=always'" "less -> bat (paged)"
+assert_contains "$out" "alias cat='batcat --paging=never'" "cat -> bat (unpaged, pipe-safe)"
+rm -f "$BIN/batcat"
+
 # EDITOR/VISUAL cover non-interactive callers (git, etc.) where aliases don't apply
 ENV_SH="$REPO/shell/.config/shell/env.sh"
 grep -q '^export EDITOR="nvim"' "$ENV_SH" && pass "EDITOR=nvim" || fail "EDITOR=nvim"
