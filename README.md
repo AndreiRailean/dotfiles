@@ -127,6 +127,12 @@ git outright on any machine that hasn't installed it yet. `core.pager` is run
 through a shell, so the `||` fallback works. `interactive.diffFilter` is
 guarded the same way, falling back to `cat`.
 
+Diffs render side-by-side (delta falls back to unified on a narrow terminal),
+and `merge.conflictstyle = zdiff3` adds the common ancestor to conflict markers
+while hoisting the lines both sides already agree on out of the conflict.
+zdiff3 needs git ≥ 2.35 — a test performs a real conflicting merge to confirm
+the running git accepts it.
+
 `$PAGER` itself stays plain `less`, so non-interactive callers (`man`,
 `systemctl`, …) are unaffected.
 

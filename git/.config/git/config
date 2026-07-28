@@ -58,9 +58,16 @@
 [delta]
 	navigate = true      # n / N jump between files in a diff
 	line-numbers = true
+	side-by-side = true  # delta falls back to unified when the terminal is narrow
 
 [diff]
 	colorMoved = default   # distinguish moved lines from added/removed
+
+[merge]
+	# zdiff3 adds the common ancestor to conflict markers (|||||||  section)
+	# and hoists the lines both sides share out of the conflict — delta's
+	# recommended pairing. Needs git >= 2.35; older git errors on merge.
+	conflictstyle = zdiff3
 
 # Authenticate GitHub over HTTPS via the gh CLI. Portable: `!gh` resolves on
 # PATH (so it works whether gh is in /usr/bin or /opt/homebrew/bin), and the
