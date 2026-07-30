@@ -309,8 +309,14 @@ conflict — adopt it with `./doctor.sh --adopt` or remove it first.
 
 ### Auto-layout for new worktrees
 
-Every new git-worktree workspace gets the same treatment automatically: the
-root pane splits side-by-side, and a `lazygit` tab opens beside it.
+Every new git-worktree workspace gets the same treatment automatically:
+
+```
+┌────────────────┬────────────────┐   tab 1
+│ claude         │ plain shell    │   left pane focused
+└────────────────┴────────────────┘
+tab 2: lazygit
+```
 
 herdr has **no declarative hook** for this — there's no `on_worktree_create` in
 `config.toml`, and `herdr integration` only manages agent integrations. So
@@ -327,12 +333,31 @@ outside `~/.config/herdr/`, which `doctor.sh` treats as a managed tree.
     tail -f ~/.local/state/herdr/autolayout.log
 
 Tunable by setting environment variables on the unit (`systemctl --user edit
-herdr-autolayout`): `HERDR_AUTOLAYOUT_DIRECTION` (`right`/`down`),
-`HERDR_AUTOLAYOUT_RATIO`, `HERDR_AUTOLAYOUT_LAZYGIT=0` to skip the tab,
-`HERDR_AUTOLAYOUT_LAZYGIT_CMD`, and the two focus switches. The script's
-docstring lists them all.
+herdr-autolayout`) — `HERDR_AUTOLAYOUT_` plus:
 
-Three things worth knowing before touching it:
+| | |
+| --- | --- |
+| `LEFT_CMD` | left pane command (default `claude`; empty = plain shell) |
+| `RIGHT_CMD` | right pane command (default: none, just a shell) |
+| `LAZYGIT_CMD` | lazygit tab command (empty skips the tab entirely) |
+| `FOCUS` | `left` (default) / `right` / `lazygit` / `none` |
+| `DIRECTION` | `right` (default) / `down` |
+| `RATIO` | split ratio, e.g. `0.5` |
+| `READY_SECS` | how long to wait for a shell prompt (default 90) |
+
+Four things worth knowing before touching it:
+
+- **Typing into a pane is the hard part.** Neither `pane split` nor
+  `tab create` takes a `--command`, so commands are typed with
+  `pane send-text` — and text sent before the shell reaches its prompt is
+  echoed to the screen then discarded. Shell init here takes ~5s, so this bites
+  every time. `fg == shell_pid` does *not* mean ready (bash is its own
+  foreground group the instant it spawns); the daemon also waits for the pane to
+  have drawn something, then **verifies the process actually started** and
+  retries with a ctrl-u if it didn't.
+- **Each new worktree is a new directory, so Claude Code shows its "trust this
+  folder" prompt** the first time. Press enter; there's no way around it from
+  here.
 
 - **Subscribing replays recent `workspace_created` events.** Without a guard, a
   restart would re-split workspaces you'd already arranged. The daemon only acts

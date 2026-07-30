@@ -1,13 +1,37 @@
 #!/usr/bin/env python3
 """Auto-arrange every new herdr git-worktree workspace.
 
-When a worktree workspace appears, do the two things I always do by hand:
-split the root pane side-by-side, and open a lazygit tab.
+When a worktree workspace appears, do what I always do by hand:
+
+    ┌────────────────┬────────────────┐   tab 1
+    │ claude         │ plain shell    │   left pane focused
+    └────────────────┴────────────────┘
+    tab 2: lazygit
 
 herdr has no declarative hook for this (no on_worktree_create in config.toml,
 and `herdr integration` is only for agent integrations), so this subscribes to
 the socket API's event stream instead. That keeps the native prefix+shift+G
 flow untouched and fires however the worktree was made — TUI, CLI, or API.
+
+Commands are typed into panes with `pane send-text`, because neither
+`pane split` nor `tab create` accepts a --command. That makes shell readiness
+the whole problem: text sent before the shell reaches its prompt is echoed to
+the screen and then discarded, because the newline arrives before readline is
+listening. A slow WSL shell (~5s to source rc files here) loses it every time.
+
+Two things guard against that, because neither is sufficient alone:
+
+  * Wait for a prompt, not for the process. `fg == shell_pid` is useless by
+    itself — bash is its own foreground process group from the instant it
+    spawns. We additionally require the pane to have drawn *something*, which
+    no un-initialised shell has done. That stays prompt- and shell-agnostic.
+  * Verify, then retry. send-text reports success whenever the bytes were
+    delivered, listening shell or not, so afterwards we confirm the process
+    actually appears in the pane's foreground group — and if it never does,
+    clear the input line and send again.
+
+Both panes are created up front, before any waiting, so their shells boot
+concurrently rather than one after the other.
 
 Two quirks of the 0.7.5 API this works around:
 
@@ -23,12 +47,14 @@ change them. Failures are logged and the loop reconnects rather than dying,
 so the worst case is layouts silently stop happening — never a broken herdr.
 
 Config via environment (all optional):
+  HERDR_AUTOLAYOUT_LEFT_CMD    command for the left pane (default: claude;
+                               empty string leaves it a plain shell)
+  HERDR_AUTOLAYOUT_RIGHT_CMD   command for the right pane (default: none)
+  HERDR_AUTOLAYOUT_LAZYGIT_CMD lazygit tab command (empty skips the tab)
+  HERDR_AUTOLAYOUT_FOCUS       left (default) | right | lazygit | none
   HERDR_AUTOLAYOUT_DIRECTION   right (default) | down
   HERDR_AUTOLAYOUT_RATIO       split ratio, e.g. 0.5
-  HERDR_AUTOLAYOUT_LAZYGIT     1 (default) | 0 to skip the lazygit tab
-  HERDR_AUTOLAYOUT_LAZYGIT_CMD command for the tab (default: lazygit)
-  HERDR_AUTOLAYOUT_FOCUS_LAZYGIT  0 (default) leaves focus in the code pane
-  HERDR_AUTOLAYOUT_SPLIT_FOCUS 1 (default) focuses the new split pane
+  HERDR_AUTOLAYOUT_READY_SECS  seconds to wait for a shell prompt (default 90)
   HERDR_SOCK                   socket path override
 """
 
@@ -46,12 +72,13 @@ XDG_STATE = os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "st
 SOCK = os.environ.get("HERDR_SOCK") or os.path.join(XDG_CONFIG, "herdr", "herdr.sock")
 LOG = os.path.join(XDG_STATE, "herdr", "autolayout.log")
 
+LEFT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LEFT_CMD", "claude")
+RIGHT_CMD = os.environ.get("HERDR_AUTOLAYOUT_RIGHT_CMD", "")
+LAZYGIT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_CMD", "lazygit")
+FOCUS = os.environ.get("HERDR_AUTOLAYOUT_FOCUS", "left")
 DIRECTION = os.environ.get("HERDR_AUTOLAYOUT_DIRECTION", "right")
 RATIO = os.environ.get("HERDR_AUTOLAYOUT_RATIO", "")
-WANT_LAZYGIT = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT", "1") != "0"
-LAZYGIT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_CMD", "lazygit")
-FOCUS_LAZYGIT = os.environ.get("HERDR_AUTOLAYOUT_FOCUS_LAZYGIT", "0") == "1"
-SPLIT_FOCUS = os.environ.get("HERDR_AUTOLAYOUT_SPLIT_FOCUS", "1") != "0"
+READY_SECS = float(os.environ.get("HERDR_AUTOLAYOUT_READY_SECS", "90"))
 
 # Runtime state lives outside ~/.config/herdr on purpose: doctor.sh treats that
 # directory as a managed tree and would report a stray real file as drift.
@@ -106,7 +133,24 @@ def panes_of(workspace_id):
     return ids, tabs
 
 
-def root_pane(workspace_id, tab_id, attempts=10):
+def new_pane_after(workspace_id, before, action, attempts=20):
+    """Run action(), then return the pane id that appeared.
+
+    Neither `pane split` nor `tab create` is documented to return a pane id, so
+    diff the workspace's pane set instead of parsing their output.
+    """
+    if action() is None:
+        return None
+    for _ in range(attempts):
+        after, _ = panes_of(workspace_id)
+        fresh = after - before
+        if fresh:
+            return sorted(fresh)[0]
+        time.sleep(0.15)
+    return None
+
+
+def root_pane(workspace_id, tab_id, attempts=20):
     """The first pane of tab_id. Retried: the pane may not exist yet."""
     for _ in range(attempts):
         ids, tabs = panes_of(workspace_id)
@@ -115,6 +159,94 @@ def root_pane(workspace_id, tab_id, attempts=10):
             return in_tab[0]
         time.sleep(0.15)
     return None
+
+
+def herdr_text(*args, timeout=15):
+    """Like herdr(), for the commands that print raw text instead of JSON."""
+    try:
+        p = subprocess.run(
+            ["herdr", *args], capture_output=True, text=True, timeout=timeout
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ""
+    return p.stdout if p.returncode == 0 else ""
+
+
+def foreground(pane):
+    """Names of the processes in the pane's foreground group, plus shell_pid."""
+    data = herdr("pane", "process-info", "--pane", pane, quiet=True)
+    info = ((data or {}).get("result") or {}).get("process_info") or {}
+    names = {q.get("name") for q in info.get("foreground_processes") or [] if q.get("name")}
+    return names, info.get("shell_pid"), info.get("foreground_process_group_id")
+
+
+def prompt_ready(pane, timeout, stable=2, interval=0.4):
+    """Wait until the pane's shell has actually printed a prompt.
+
+    `fg == shell_pid` alone is not enough: bash is its own foreground process
+    group from the instant it spawns, long before it has sourced rc files or
+    drawn a prompt. Text sent in that window gets echoed and thrown away. So
+    also require the pane to have produced visible output, which no
+    un-initialised shell has. Prompt-agnostic — it does not care what the
+    prompt looks like, only that something was drawn.
+    """
+    deadline = time.time() + timeout
+    hits = 0
+    while time.time() < deadline:
+        names, shell, fg = foreground(pane)
+        idle = bool(shell) and fg == shell
+        drawn = bool(
+            herdr_text(
+                "pane", "read", pane, "--source", "visible", "--lines", "8",
+                "--format", "text",
+            ).strip()
+        )
+        if idle and drawn:
+            hits += 1
+            if hits >= stable:
+                return True
+        else:
+            hits = 0
+        time.sleep(interval)
+    return False
+
+
+def run_in_pane(pane, cmd, what, attempts=3, settle=12.0):
+    """Type cmd into pane, then confirm it actually started.
+
+    Verifying beats trusting: send-text reports success as long as the bytes
+    were delivered, even when the shell was not listening. If the process never
+    appears we clear the input line and try again, so a shell that is merely
+    slow still ends up running the command.
+    """
+    if not cmd:
+        return
+    exe = os.path.basename(cmd.split()[0])
+    for attempt in range(1, attempts + 1):
+        names, _, _ = foreground(pane)
+        if exe in names:
+            log(f"  {what}: {exe} running in {pane}")
+            return
+        if not prompt_ready(pane, READY_SECS):
+            log(f"  ! {what}: no prompt within {READY_SECS:g}s; did not send {cmd!r}")
+            return
+        if attempt > 1:
+            # A previous attempt may have left half-typed text on the line;
+            # ctrl-u clears it so we do not end up with "claudeclaude".
+            herdr("pane", "send-text", pane, "\x15")
+        if herdr("pane", "send-text", pane, cmd + "\n") is None:
+            log(f"  ! {what}: send-text failed")
+            return
+        waited = time.time() + settle
+        while time.time() < waited:
+            names, _, _ = foreground(pane)
+            if exe in names:
+                suffix = f" (attempt {attempt})" if attempt > 1 else ""
+                log(f"  {what}: {exe} running in {pane}{suffix}")
+                return
+            time.sleep(0.25)
+        log(f"  ! {what}: {exe} did not start (attempt {attempt}/{attempts})")
+    log(f"  ! {what}: gave up trying to start {cmd!r}")
 
 
 def pristine(ws_id):
@@ -154,53 +286,62 @@ def arrange(ws):
 
     log(f"worktree workspace {ws_id} ({label}) at {cwd}")
 
-    pane = root_pane(ws_id, tab_id)
-    if not pane:
+    left = root_pane(ws_id, tab_id)
+    if not left:
         log(f"  ! no pane found in {tab_id}; skipping")
         return
 
-    split = ["pane", "split", "--pane", pane, "--direction", DIRECTION]
-    if SPLIT_FOCUS:
-        split.append("--focus")
+    # ── Build the whole layout first, so every shell boots in parallel ──
+    split = ["pane", "split", "--pane", left, "--direction", DIRECTION]
     if RATIO:
         split += ["--ratio", RATIO]
     if cwd:
         split += ["--cwd", cwd]
-    if herdr(*split) is None:
-        log("  ! split failed")
-    else:
-        log(f"  split {pane} {DIRECTION}")
-
-    if not WANT_LAZYGIT:
-        return
-
-    # `herdr tab create` has no --command, so create the tab and then type into
-    # its pane. Diff the pane set to find the new one: tab create's output shape
-    # is not guaranteed to carry a pane id.
     before, _ = panes_of(ws_id)
-    tab_args = ["tab", "create", "--workspace", ws_id, "--label", "lazygit"]
-    if cwd:
-        tab_args += ["--cwd", cwd]
-    tab_args.append("--focus" if FOCUS_LAZYGIT else "--no-focus")
-    if herdr(*tab_args) is None:
-        log("  ! lazygit tab creation failed")
-        return
-
-    new = set()
-    for _ in range(10):
-        after, _ = panes_of(ws_id)
-        new = after - before
-        if new:
-            break
-        time.sleep(0.15)
-    if not new:
-        log("  ! could not identify the new tab's pane; lazygit not started")
-        return
-    target = sorted(new)[0]
-    if herdr("pane", "send-text", target, LAZYGIT_CMD + "\n") is None:
-        log("  ! send-text failed")
+    right = new_pane_after(ws_id, before, lambda: herdr(*split))
+    if right:
+        log(f"  split {left} {DIRECTION} -> {right}")
     else:
-        log(f"  lazygit tab pane {target}")
+        log("  ! split failed or new pane not found")
+
+    lazygit = None
+    if LAZYGIT_CMD:
+        tab = ["tab", "create", "--workspace", ws_id, "--label", "lazygit", "--no-focus"]
+        if cwd:
+            tab += ["--cwd", cwd]
+        before, _ = panes_of(ws_id)
+        lazygit = new_pane_after(ws_id, before, lambda: herdr(*tab))
+        if not lazygit:
+            log("  ! lazygit tab creation failed or new pane not found")
+
+    # ── Focus before the waiting starts, so the layout settles visibly ──
+    # `pane focus` moves relative to a pane, so to land on the left pane ask the
+    # right one for its left neighbour. Always explicit ids, never --current:
+    # this workspace may not be the focused one, and yanking focus out of
+    # whatever the user is doing elsewhere would be unforgivable.
+    if FOCUS == "left" and right:
+        # The split was made without --focus, so the left pane should still hold
+        # focus; this makes that explicit rather than assumed.
+        focus_result = herdr("pane", "focus", "--pane", right, "--direction", "left")
+    elif FOCUS == "right" and right:
+        focus_result = herdr("pane", "focus", "--pane", left, "--direction", DIRECTION)
+    elif FOCUS == "lazygit" and lazygit:
+        _, tabs = panes_of(ws_id)
+        lg_tab = tabs.get(lazygit)
+        focus_result = herdr("tab", "focus", lg_tab) if lg_tab else None
+    else:
+        focus_result = "skipped"
+    if focus_result is None:
+        log(f"  ! could not focus {FOCUS}")
+    elif focus_result != "skipped":
+        log(f"  focused {FOCUS}")
+
+    # ── Now type into each pane as its shell becomes usable ──
+    run_in_pane(left, LEFT_CMD, "left pane")
+    if right:
+        run_in_pane(right, RIGHT_CMD, "right pane")
+    if lazygit:
+        run_in_pane(lazygit, LAZYGIT_CMD, "lazygit tab")
 
 
 def handle(event, seen):
