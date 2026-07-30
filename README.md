@@ -41,6 +41,9 @@ starship/.config/starship.toml -> ~/.config/starship.toml
 claude/.claude/CLAUDE.md   ->  ~/.claude/CLAUDE.md
 claude/.claude/settings.json -> ~/.claude/settings.json
 claude/.claude/statusline-command.sh -> ~/.claude/statusline-command.sh
+herdr/.config/herdr/config.toml -> ~/.config/herdr/config.toml
+herdr/.config/herdr/scripts/    -> ~/.config/herdr/scripts/
+herdr/.config/systemd/user/     -> ~/.config/systemd/user/
 ```
 
 Everything is XDG-based (`~/.config`, `~/.local/share`, …).
@@ -303,3 +306,44 @@ same directory (`herdr*.sock`, `herdr*.log`, `session.json`, `.plugins.lock`);
 those are git-ignored so they're never committed and `doctor.sh` doesn't flag
 them as drift. If a machine already has a real `config.toml` there, `stow` will
 conflict — adopt it with `./doctor.sh --adopt` or remove it first.
+
+### Auto-layout for new worktrees
+
+Every new git-worktree workspace gets the same treatment automatically: the
+root pane splits side-by-side, and a `lazygit` tab opens beside it.
+
+herdr has **no declarative hook** for this — there's no `on_worktree_create` in
+`config.toml`, and `herdr integration` only manages agent integrations. So
+`herdr/.config/herdr/scripts/herdr-autolayout` subscribes to the socket API's
+event stream instead, which keeps the native `prefix+shift+G` flow untouched and
+fires however the worktree was created (TUI, CLI, or API).
+
+It runs as a systemd **user** unit (`herdr-autolayout.service`), enabled by
+`install.sh`. Logs go to `$XDG_STATE_HOME/herdr/autolayout.log` — deliberately
+outside `~/.config/herdr/`, which `doctor.sh` treats as a managed tree.
+
+    systemctl --user status herdr-autolayout    # is it running?
+    systemctl --user restart herdr-autolayout   # after editing the script
+    tail -f ~/.local/state/herdr/autolayout.log
+
+Tunable by setting environment variables on the unit (`systemctl --user edit
+herdr-autolayout`): `HERDR_AUTOLAYOUT_DIRECTION` (`right`/`down`),
+`HERDR_AUTOLAYOUT_RATIO`, `HERDR_AUTOLAYOUT_LAZYGIT=0` to skip the tab,
+`HERDR_AUTOLAYOUT_LAZYGIT_CMD`, and the two focus switches. The script's
+docstring lists them all.
+
+Three things worth knowing before touching it:
+
+- **Subscribing replays recent `workspace_created` events.** Without a guard, a
+  restart would re-split workspaces you'd already arranged. The daemon only acts
+  on a workspace that still has exactly one tab and one pane, which makes it
+  idempotent — already-arranged and since-deleted workspaces are skipped.
+- **It leans on two undocumented API behaviours.** `events.wait` advertises
+  workspace matches in the schema but the server rejects them
+  (`unsupported_event_wait_match`), and `workspace_created` *is* delivered on a
+  subscription even though `SubscriptionEventKind` doesn't list it. A herdr
+  upgrade could change either. Failures are logged and the loop reconnects, so
+  the worst case is layouts quietly stop — never a broken herdr.
+- **The `herdr` package now also owns `~/.config/systemd`** (for the unit), so
+  `doctor.sh` scans it. A hand-added user unit there will show up as untracked
+  drift — adopt it or add it to `.gitignore`.
