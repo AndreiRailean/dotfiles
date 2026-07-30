@@ -7,8 +7,9 @@
 _shell_dir="${XDG_CONFIG_HOME:-$HOME/.config}/shell"
 
 # Order matters: env sets XDG/vars, path builds PATH, tools may extend PATH,
-# prompt runs last so starship is on PATH by the time it initialises.
-for _f in env path aliases tools prompt; do
+# prompt runs before drift so starship is on PATH by the time it initialises,
+# and drift runs last because it is the only fragment that prints output.
+for _f in env path aliases tools prompt drift; do
   [ -r "$_shell_dir/$_f.sh" ] && . "$_shell_dir/$_f.sh"
 done
 unset _f
