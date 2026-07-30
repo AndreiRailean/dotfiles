@@ -1,11 +1,10 @@
 # ~/.config/shell/drift.sh — nudge when a tool rewrote tracked dotfiles config
 #
 # Some files in the dotfiles repo are rewritten by the tool that owns them
-# rather than by you: Claude Code rewrites claude/.claude/settings.json
-# whenever a setting changes (/config, /effort, /fast, plugin toggles,
-# accepted dialogs). Those edits land in the repo silently, so without a
-# prompt like this they sit uncommitted until you happen to run `git status`
-# in ~/dotfiles — which is exactly the thing you forget to do.
+# rather than by you — see .auto-written in the repo root for the list and the
+# reasoning. Those edits land in the repo silently, so without a prompt like
+# this they sit uncommitted until you happen to run `git status` in
+# ~/dotfiles — which is exactly the thing you forget to do.
 #
 # Prints two short lines (what changed, what to run), only when something
 # needs attention, and at most once every $DOTFILES_DRIFT_NUDGE_HOURS
@@ -49,9 +48,17 @@ _dotfiles_drift_nudge() {
     fi
   fi
 
-  # Keep this list in sync with AUTO_WRITTEN in doctor.sh.
-  _dn_dirty=$(git -C "$_dn_repo" status --porcelain -- \
-    claude/.claude/settings.json 2>/dev/null)
+  # Watched paths come from .auto-written, shared with doctor.sh. Unquoted on
+  # purpose so the list word-splits into separate pathspecs; an empty list
+  # would make git report the whole repo, so bail instead.
+  _dn_paths=$(sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' \
+    "$_dn_repo/.auto-written" 2>/dev/null | tr '\n' ' ')
+  if [ -n "$_dn_paths" ]; then
+    # shellcheck disable=SC2086
+    _dn_dirty=$(git -C "$_dn_repo" status --porcelain -- $_dn_paths 2>/dev/null)
+  else
+    _dn_dirty=""
+  fi
 
   _dn_unpushed=0
   if git -C "$_dn_repo" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
@@ -78,7 +85,8 @@ _dotfiles_drift_nudge() {
     mkdir -p "${_dn_stamp%/*}" 2>/dev/null && date +%s >"$_dn_stamp" 2>/dev/null
   fi
 
-  unset _dn_repo _dn_link _dn_stamp _dn_last _dn_window _dn_dirty _dn_unpushed _dn_msg _dn_disp
+  unset _dn_repo _dn_link _dn_stamp _dn_last _dn_window _dn_paths _dn_dirty \
+    _dn_unpushed _dn_msg _dn_disp
 }
 
 _dotfiles_drift_nudge

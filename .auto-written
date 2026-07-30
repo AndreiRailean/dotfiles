@@ -1,0 +1,16 @@
+# Tracked files that a TOOL rewrites, not you.
+#
+# These land in the repo silently — stow and symlinks stay healthy, the change
+# just sits uncommitted until you happen to run `git status` here. doctor.sh
+# reports them, and shell/.config/shell/drift.sh nudges about them at terminal
+# startup. Both read this file, so add a path once and both pick it up.
+#
+# One repo-relative path per line. Blank lines and #-comments are ignored.
+# Paths must not contain spaces (drift.sh word-splits the list in POSIX sh).
+#
+# Deliberately NOT the whole repo: a warning that fires on every ordinary
+# dotfiles edit is one you learn to ignore.
+
+# Claude Code rewrites this on /config, /effort, plugin toggles, and accepted
+# permission dialogs.
+claude/.claude/settings.json

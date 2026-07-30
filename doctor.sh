@@ -93,20 +93,26 @@ for pkg in $PACKAGES; do
 done
 
 # ── Machine-written config: uncommitted / unpushed ──────────
-# Some tracked files are rewritten by the tool that owns them, not by you:
-# Claude Code rewrites claude/.claude/settings.json whenever a setting changes
-# (/config, /effort, /fast, plugin toggles, accepted dialogs). Those edits land
-# in the repo silently — `git status` shows them only if you happen to look.
-#
-# Deliberately scoped to that list rather than the whole repo: flagging every
-# dotfiles edit would fire during normal work and train you to ignore it. The
-# signal worth having is "a tool changed config behind your back".
-AUTO_WRITTEN=(claude/.claude/settings.json)
+# Some tracked files are rewritten by the tool that owns them, not by you.
+# The list lives in .auto-written so drift.sh can share it; see that file for
+# why it is scoped rather than covering the whole repo.
+AUTO_WRITTEN=()
+if [ -r "$DOTFILES_DIR/.auto-written" ]; then
+  while IFS= read -r line; do
+    line="${line%%#*}"                      # strip comments
+    line="$(printf '%s' "$line" | tr -d '[:space:]')"
+    [ -n "$line" ] && AUTO_WRITTEN+=("$line")
+  done < "$DOTFILES_DIR/.auto-written"
+fi
 
+# An empty list would make `git status -- ` cover the WHOLE repo and report
+# every ordinary edit, so skip the check rather than cry wolf.
 autodirty=()
-while IFS= read -r line; do
-  [ -n "$line" ] && autodirty+=("$line")
-done < <(git status --porcelain -- "${AUTO_WRITTEN[@]}" 2>/dev/null || true)
+if [ "${#AUTO_WRITTEN[@]}" -gt 0 ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && autodirty+=("$line")
+  done < <(git status --porcelain -- "${AUTO_WRITTEN[@]}" 2>/dev/null || true)
+fi
 
 # Committed but never pushed = the change isn't on your other machines yet,
 # which defeats the point of keeping this config in a repo at all.

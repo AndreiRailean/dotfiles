@@ -202,8 +202,8 @@ uncommitted until you happen to run `git status` in `~/dotfiles`.
 
 Two things watch for that:
 
-- **`doctor.sh`** reports uncommitted changes to the files listed in its
-  `AUTO_WRITTEN` array, plus any commits you haven't pushed (unpushed commits
+- **`doctor.sh`** reports uncommitted changes to the files listed in
+  `.auto-written`, plus any commits you haven't pushed (unpushed commits
   aren't on your other machines, which defeats the point of the repo).
 - **`shell/.config/shell/drift.sh`** prints a two-line nudge at terminal
   startup when either applies — so you hear about it even on a day you never
@@ -214,9 +214,10 @@ Two things watch for that:
     DOTFILES_DRIFT_NUDGE_HOURS=24   # nudge at most once a day
     _dotfiles_drift_nudge force     # check right now, ignoring the rate limit
 
-Both are deliberately scoped to *machine-written* files rather than the whole
-repo: a warning that fires on every ordinary dotfiles edit is one you learn to
-ignore. Keep the list in `drift.sh` in sync with `AUTO_WRITTEN` in `doctor.sh`.
+Both read the same list from `.auto-written` in the repo root, so a new
+machine-written file only has to be added once. Both are deliberately scoped to
+those files rather than the whole repo: a warning that fires on every ordinary
+dotfiles edit is one you learn to ignore.
 
 **Not covered:** a brand-new tool writing to a location no package touches yet
 (e.g. `~/.config/bat/`). `~/.config` is too full of cache/state to scan blindly,
