@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/tmux/scripts/agent-notify"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/tmux/scripts/agent-notify"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/tmux/scripts/agent-notify"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "vercel@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "supabase@claude-plugins-official": true,
+    "stripe@claude-plugins-official": true,
+    "mattpocock-skills@mattpocock": true
+  },
+  "extraKnownMarketplaces": {
+    "mattpocock": {
+      "source": {
+        "source": "github",
+        "repo": "mattpocock/skills"
+      }
+    }
+  },
+  "theme": "auto",
+  "preferredNotifChannel": "terminal_bell",
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "skipAutoPermissionPrompt": true,
+  "fastModePerSessionOptIn": true
+}
