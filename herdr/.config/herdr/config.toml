@@ -18,3 +18,19 @@ name = "tokyo-night"
 # Match the tmux prefix (Ctrl-a) for muscle memory. Everything else keeps
 # herdr's default keymap (pane nav prefix+h/j/k/l, splits prefix+v / prefix+-).
 prefix = "ctrl+a"
+
+# Apply the worktree layout (claude | shell, plus a lazygit tab) to the current
+# workspace by hand — for a workspace that predates the auto-layout daemon, or
+# one you've since rearranged. Same code path the daemon uses, and idempotent,
+# so pressing it twice is harmless.
+#
+# "popup" rather than "pane": a popup is session-modal and doesn't alter the tab
+# layout, which matters because the script decides whether to split by counting
+# the panes in the tab. It closes itself when the script finishes, so it doubles
+# as a progress log. L for layout; verified free against herdr's default keymap.
+[[keys.command]]
+key = "prefix+shift+l"
+type = "popup"
+command = "$HOME/.config/herdr/scripts/herdr-autolayout arrange"
+width = "70%"
+height = "50%"

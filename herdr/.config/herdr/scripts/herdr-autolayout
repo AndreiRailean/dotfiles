@@ -1,17 +1,34 @@
 #!/usr/bin/env python3
-"""Auto-arrange every new herdr git-worktree workspace.
-
-When a worktree workspace appears, do what I always do by hand:
+"""Arrange a herdr git-worktree workspace, automatically or on demand.
 
     ┌────────────────┬────────────────┐   tab 1
     │ claude         │ plain shell    │   left pane focused
     └────────────────┴────────────────┘
     tab 2: lazygit
 
-herdr has no declarative hook for this (no on_worktree_create in config.toml,
-and `herdr integration` is only for agent integrations), so this subscribes to
-the socket API's event stream instead. That keeps the native prefix+shift+G
-flow untouched and fires however the worktree was made — TUI, CLI, or API.
+Two entry points, one implementation:
+
+    herdr-autolayout                  daemon: arrange every new worktree
+    herdr-autolayout arrange [WS_ID]  arrange one workspace now
+
+The second is what the `prefix+shift+l` keybinding in config.toml runs, so the
+same layout can be applied by hand — to a workspace that predates the daemon,
+or one you have since rearranged. With no argument it targets the workspace it
+was invoked from ($HERDR_WORKSPACE_ID, which herdr exports into every pane).
+
+herdr has no declarative hook for the automatic half (no on_worktree_create in
+config.toml, and `herdr integration` only manages agent integrations), so the
+daemon subscribes to the socket API's event stream. That keeps the native
+prefix+shift+G flow untouched and fires however the worktree was made — TUI,
+CLI, or API. There is deliberately no attempt to make the daemon "press" the
+keybinding: `pane.send_keys` targets a pane's program rather than herdr's input
+layer, and registering a real plugin action needs an undocumented plugin
+manifest. Calling the same function is simpler and works even when the target
+workspace is not focused.
+
+Arranging is idempotent, so pressing the key twice is harmless: the split only
+happens when the tab has a single pane, the lazygit tab is reused when one
+already exists, and a command is only sent when it is not already running.
 
 Commands are typed into panes with `pane send-text`, because neither
 `pane split` nor `tab create` accepts a --command. That makes shell readiness
@@ -29,9 +46,6 @@ Two things guard against that, because neither is sufficient alone:
     delivered, listening shell or not, so afterwards we confirm the process
     actually appears in the pane's foreground group — and if it never does,
     clear the input line and send again.
-
-Both panes are created up front, before any waiting, so their shells boot
-concurrently rather than one after the other.
 
 Two quirks of the 0.7.5 API this works around:
 
@@ -51,6 +65,7 @@ Config via environment (all optional):
                                empty string leaves it a plain shell)
   HERDR_AUTOLAYOUT_RIGHT_CMD   command for the right pane (default: none)
   HERDR_AUTOLAYOUT_LAZYGIT_CMD lazygit tab command (empty skips the tab)
+  HERDR_AUTOLAYOUT_LAZYGIT_TAB label for the lazygit tab (default: lazygit)
   HERDR_AUTOLAYOUT_FOCUS       left (default) | right | lazygit | none
   HERDR_AUTOLAYOUT_DIRECTION   right (default) | down
   HERDR_AUTOLAYOUT_RATIO       split ratio, e.g. 0.5
@@ -69,12 +84,17 @@ HOME = os.path.expanduser("~")
 XDG_CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
 XDG_STATE = os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state")
 
-SOCK = os.environ.get("HERDR_SOCK") or os.path.join(XDG_CONFIG, "herdr", "herdr.sock")
+SOCK = (
+    os.environ.get("HERDR_SOCK")
+    or os.environ.get("HERDR_SOCKET_PATH")
+    or os.path.join(XDG_CONFIG, "herdr", "herdr.sock")
+)
 LOG = os.path.join(XDG_STATE, "herdr", "autolayout.log")
 
 LEFT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LEFT_CMD", "claude")
 RIGHT_CMD = os.environ.get("HERDR_AUTOLAYOUT_RIGHT_CMD", "")
 LAZYGIT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_CMD", "lazygit")
+LAZYGIT_TAB = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_TAB", "lazygit")
 FOCUS = os.environ.get("HERDR_AUTOLAYOUT_FOCUS", "left")
 DIRECTION = os.environ.get("HERDR_AUTOLAYOUT_DIRECTION", "right")
 RATIO = os.environ.get("HERDR_AUTOLAYOUT_RATIO", "")
@@ -121,6 +141,17 @@ def herdr(*args, timeout=15, quiet=False):
         return {}
 
 
+def herdr_text(*args, timeout=15):
+    """Like herdr(), for the commands that print raw text instead of JSON."""
+    try:
+        p = subprocess.run(
+            ["herdr", *args], capture_output=True, text=True, timeout=timeout
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ""
+    return p.stdout if p.returncode == 0 else ""
+
+
 def panes_of(workspace_id):
     """Set of pane ids in a workspace, plus a pane_id -> tab_id map."""
     data = herdr("pane", "list", "--workspace", workspace_id) or {}
@@ -131,6 +162,23 @@ def panes_of(workspace_id):
     ids = {p.get("pane_id") for p in panes if p.get("pane_id")}
     tabs = {p.get("pane_id"): p.get("tab_id") for p in panes if p.get("pane_id")}
     return ids, tabs
+
+
+def tabs_of(workspace_id):
+    data = herdr("tab", "list", "--workspace", workspace_id) or {}
+    return (data.get("result") or {}).get("tabs") or []
+
+
+def workspace_info(ws_id, quiet=False):
+    data = herdr("workspace", "get", ws_id, quiet=quiet)
+    if not data:
+        return None
+    return (data.get("result") or {}).get("workspace")
+
+
+def panes_in_tab(workspace_id, tab_id):
+    ids, tabs = panes_of(workspace_id)
+    return sorted(pid for pid in ids if tabs.get(pid) == tab_id)
 
 
 def new_pane_after(workspace_id, before, action, attempts=20):
@@ -148,28 +196,6 @@ def new_pane_after(workspace_id, before, action, attempts=20):
             return sorted(fresh)[0]
         time.sleep(0.15)
     return None
-
-
-def root_pane(workspace_id, tab_id, attempts=20):
-    """The first pane of tab_id. Retried: the pane may not exist yet."""
-    for _ in range(attempts):
-        ids, tabs = panes_of(workspace_id)
-        in_tab = sorted(pid for pid in ids if tabs.get(pid) == tab_id)
-        if in_tab:
-            return in_tab[0]
-        time.sleep(0.15)
-    return None
-
-
-def herdr_text(*args, timeout=15):
-    """Like herdr(), for the commands that print raw text instead of JSON."""
-    try:
-        p = subprocess.run(
-            ["herdr", *args], capture_output=True, text=True, timeout=timeout
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return ""
-    return p.stdout if p.returncode == 0 else ""
 
 
 def foreground(pane):
@@ -193,7 +219,7 @@ def prompt_ready(pane, timeout, stable=2, interval=0.4):
     deadline = time.time() + timeout
     hits = 0
     while time.time() < deadline:
-        names, shell, fg = foreground(pane)
+        _, shell, fg = foreground(pane)
         idle = bool(shell) and fg == shell
         drawn = bool(
             herdr_text(
@@ -225,7 +251,7 @@ def run_in_pane(pane, cmd, what, attempts=3, settle=12.0):
     for attempt in range(1, attempts + 1):
         names, _, _ = foreground(pane)
         if exe in names:
-            log(f"  {what}: {exe} running in {pane}")
+            log(f"  {what}: {exe} already running in {pane}")
             return
         if not prompt_ready(pane, READY_SECS):
             log(f"  ! {what}: no prompt within {READY_SECS:g}s; did not send {cmd!r}")
@@ -252,67 +278,75 @@ def run_in_pane(pane, cmd, what, attempts=3, settle=12.0):
 def pristine(ws_id):
     """Is this workspace still a single untouched pane in a single tab?
 
-    Subscribing replays recent workspace_created events, so a restart would
+    Subscribing replays recent workspace_created events, so the daemon would
     otherwise re-arrange workspaces that were already set up (or ones since
-    deleted). Requiring a 1-tab/1-pane workspace makes arranging idempotent:
-    anything already split, already given a lazygit tab, or already gone is
-    left alone. Returns None when the workspace no longer exists.
+    deleted). Requiring a 1-tab/1-pane workspace means the automatic path never
+    touches a workspace you have already shaped. Manual runs skip this check —
+    asking for it by keypress is intent enough — and stay safe because
+    arranging is idempotent. Returns None when the workspace is gone.
     """
-    # A replayed event can name a workspace that no longer exists; that is a
-    # normal outcome here, not an error worth logging.
-    data = herdr("workspace", "get", ws_id, quiet=True)
-    if not data:
-        return None
-    ws = (data.get("result") or {}).get("workspace")
+    ws = workspace_info(ws_id, quiet=True)
     if not ws:
         return None
     return ws.get("tab_count") == 1 and ws.get("pane_count") == 1
 
 
 def arrange(ws):
+    """Apply the layout to a workspace dict. Idempotent."""
     ws_id = ws.get("workspace_id")
     tab_id = ws.get("active_tab_id")
     wt = ws.get("worktree") or {}
     cwd = wt.get("checkout_path")
-    label = ws.get("label")
+    log(f"arranging {ws_id} ({ws.get('label')})" + (f" at {cwd}" if cwd else ""))
 
-    state = pristine(ws_id)
-    if state is None:
-        log(f"skip {ws_id} ({label}): workspace is gone (replayed event)")
-        return
-    if not state:
-        log(f"skip {ws_id} ({label}): already has extra tabs/panes")
-        return
-
-    log(f"worktree workspace {ws_id} ({label}) at {cwd}")
-
-    left = root_pane(ws_id, tab_id)
-    if not left:
+    in_tab = panes_in_tab(ws_id, tab_id)
+    if not in_tab:
         log(f"  ! no pane found in {tab_id}; skipping")
         return
+    left = in_tab[0]
+
+    # Decide "already split?" from the tab's own pane_count, not from len(in_tab).
+    # A manual run happens inside a popup, and while herdr documents a popup as
+    # not altering the tab layout, the tab's own count is the authoritative
+    # number either way — so a popup can never be mistaken for an existing split.
+    tab_meta = next((t for t in tabs_of(ws_id) if t.get("tab_id") == tab_id), None)
+    pane_count = tab_meta.get("pane_count") if tab_meta else len(in_tab)
 
     # ── Build the whole layout first, so every shell boots in parallel ──
-    split = ["pane", "split", "--pane", left, "--direction", DIRECTION]
-    if RATIO:
-        split += ["--ratio", RATIO]
-    if cwd:
-        split += ["--cwd", cwd]
-    before, _ = panes_of(ws_id)
-    right = new_pane_after(ws_id, before, lambda: herdr(*split))
-    if right:
-        log(f"  split {left} {DIRECTION} -> {right}")
+    if pane_count and pane_count > 1:
+        right = in_tab[1] if len(in_tab) > 1 else None
+        log(f"  split already present ({right})")
     else:
-        log("  ! split failed or new pane not found")
+        split = ["pane", "split", "--pane", left, "--direction", DIRECTION]
+        if RATIO:
+            split += ["--ratio", RATIO]
+        if cwd:
+            split += ["--cwd", cwd]
+        before, _ = panes_of(ws_id)
+        right = new_pane_after(ws_id, before, lambda: herdr(*split))
+        if right:
+            log(f"  split {left} {DIRECTION} -> {right}")
+        else:
+            log("  ! split failed or new pane not found")
 
     lazygit = None
     if LAZYGIT_CMD:
-        tab = ["tab", "create", "--workspace", ws_id, "--label", "lazygit", "--no-focus"]
-        if cwd:
-            tab += ["--cwd", cwd]
-        before, _ = panes_of(ws_id)
-        lazygit = new_pane_after(ws_id, before, lambda: herdr(*tab))
-        if not lazygit:
-            log("  ! lazygit tab creation failed or new pane not found")
+        existing = next(
+            (t for t in tabs_of(ws_id) if t.get("label") == LAZYGIT_TAB), None
+        )
+        if existing:
+            found = panes_in_tab(ws_id, existing.get("tab_id"))
+            lazygit = found[0] if found else None
+            log(f"  {LAZYGIT_TAB} tab already present ({lazygit})")
+        else:
+            tab = ["tab", "create", "--workspace", ws_id, "--label", LAZYGIT_TAB,
+                   "--no-focus"]
+            if cwd:
+                tab += ["--cwd", cwd]
+            before, _ = panes_of(ws_id)
+            lazygit = new_pane_after(ws_id, before, lambda: herdr(*tab))
+            if not lazygit:
+                log(f"  ! {LAZYGIT_TAB} tab creation failed or new pane not found")
 
     # ── Focus before the waiting starts, so the layout settles visibly ──
     # `pane focus` moves relative to a pane, so to land on the left pane ask the
@@ -320,8 +354,6 @@ def arrange(ws):
     # this workspace may not be the focused one, and yanking focus out of
     # whatever the user is doing elsewhere would be unforgivable.
     if FOCUS == "left" and right:
-        # The split was made without --focus, so the left pane should still hold
-        # focus; this makes that explicit rather than assumed.
         focus_result = herdr("pane", "focus", "--pane", right, "--direction", "left")
     elif FOCUS == "right" and right:
         focus_result = herdr("pane", "focus", "--pane", left, "--direction", DIRECTION)
@@ -341,7 +373,7 @@ def arrange(ws):
     if right:
         run_in_pane(right, RIGHT_CMD, "right pane")
     if lazygit:
-        run_in_pane(lazygit, LAZYGIT_CMD, "lazygit tab")
+        run_in_pane(lazygit, LAZYGIT_CMD, f"{LAZYGIT_TAB} tab")
 
 
 def handle(event, seen):
@@ -360,6 +392,13 @@ def handle(event, seen):
     if len(seen) > 500:
         seen.clear()
         seen.add(ws_id)
+    state = pristine(ws_id)
+    if state is None:
+        log(f"skip {ws_id} ({ws.get('label')}): workspace is gone (replayed event)")
+        return
+    if not state:
+        log(f"skip {ws_id} ({ws.get('label')}): already has extra tabs/panes")
+        return
     try:
         arrange(ws)
     except Exception as exc:  # never let one bad event kill the daemon
@@ -399,7 +438,7 @@ def run_once(seen):
                 handle(msg, seen)
 
 
-def main():
+def daemon():
     seen = set()
     backoff = 1
     while True:
@@ -416,5 +455,54 @@ def main():
         backoff = min(backoff * 2, 30)
 
 
+def target_workspace(argv):
+    """Which workspace should a manual run arrange?
+
+    An explicit id wins. Otherwise use the workspace we were invoked from:
+    herdr exports HERDR_WORKSPACE_ID into every pane, which needs no API call
+    and is correct even when the herdr client's focus is elsewhere. Fall back
+    to asking the server, then to whichever workspace is focused.
+    """
+    if argv:
+        return argv[0]
+    env_ws = os.environ.get("HERDR_WORKSPACE_ID")
+    if env_ws:
+        return env_ws
+    data = herdr("pane", "current", quiet=True)
+    pane = ((data or {}).get("result") or {}).get("pane") or {}
+    if pane.get("workspace_id"):
+        return pane["workspace_id"]
+    data = herdr("workspace", "list", quiet=True)
+    for ws in ((data or {}).get("result") or {}).get("workspaces") or []:
+        if ws.get("focused"):
+            return ws.get("workspace_id")
+    return None
+
+
+def arrange_once(argv):
+    ws_id = target_workspace(argv)
+    if not ws_id:
+        log("arrange: could not work out which workspace to arrange")
+        return 1
+    ws = workspace_info(ws_id)
+    if not ws:
+        log(f"arrange: workspace {ws_id} not found")
+        return 1
+    arrange(ws)
+    return 0
+
+
+def main():
+    argv = sys.argv[1:]
+    if argv and argv[0] == "arrange":
+        return arrange_once(argv[1:])
+    if argv:
+        print(__doc__.strip().splitlines()[0], file=sys.stderr)
+        print("usage: herdr-autolayout [arrange [WORKSPACE_ID]]", file=sys.stderr)
+        return 2
+    daemon()
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

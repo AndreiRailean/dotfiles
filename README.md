@@ -324,6 +324,29 @@ herdr has **no declarative hook** for this — there's no `on_worktree_create` i
 event stream instead, which keeps the native `prefix+shift+G` flow untouched and
 fires however the worktree was created (TUI, CLI, or API).
 
+**Or apply it by hand: `prefix+shift+L`.** Same code path, for a workspace that
+predates the daemon or one you've since rearranged. It's idempotent — the split
+only happens when the tab has one pane, an existing lazygit tab is reused, and a
+command is only sent if it isn't already running — so pressing it twice is a
+no-op. Two entry points, one implementation:
+
+    herdr-autolayout                  # daemon: arrange every new worktree
+    herdr-autolayout arrange [WS_ID]  # arrange one workspace now
+
+With no argument it targets the workspace it was invoked from, via the
+`HERDR_WORKSPACE_ID` that herdr exports into every pane — no API call, and
+correct even when the herdr client's focus is elsewhere.
+
+The binding is a `[[keys.command]]` of `type = "popup"` rather than `"pane"`: a
+popup is session-modal and doesn't alter the tab layout, and it doubles as a
+progress log since it stays up until the script finishes.
+
+There's deliberately no attempt to have the daemon *press* the shortcut.
+`pane.send_keys` targets a pane's program, not herdr's input layer, and
+registering a real plugin action (`plugin.action.invoke`) needs an undocumented
+plugin manifest. Calling the same function is simpler and works on an unfocused
+workspace.
+
 It runs as a systemd **user** unit (`herdr-autolayout.service`), enabled by
 `install.sh`. Logs go to `$XDG_STATE_HOME/herdr/autolayout.log` — deliberately
 outside `~/.config/herdr/`, which `doctor.sh` treats as a managed tree.
