@@ -39,14 +39,32 @@ nvim/.config/nvim/          ->  ~/.config/nvim/
 tmux/.config/tmux/          ->  ~/.config/tmux/
 starship/.config/starship.toml -> ~/.config/starship.toml
 claude/.claude/CLAUDE.md   ->  ~/.claude/CLAUDE.md
+claude/.claude/settings.json -> ~/.claude/settings.json
+claude/.claude/statusline-command.sh -> ~/.claude/statusline-command.sh
 ```
 
 Everything is XDG-based (`~/.config`, `~/.local/share`, …).
 
 The `claude` package deploys global agent conventions (e.g. Conventional
 Commits) to `~/.claude/CLAUDE.md`, which Claude Code reads for **every** project
-on the machine. Only that one file is symlinked into `~/.claude`; the rest of
-that directory (state, sessions) is left alone.
+on the machine, plus the global `settings.json` and the status-line script.
+Only those three files are symlinked into `~/.claude`; the rest of that
+directory (state, sessions, history) is left alone.
+
+`settings.json` is the live file Claude Code reads **and writes** — it rewrites
+it whenever you change a setting via `/config`, toggle a plugin, or accept a
+permission dialog. Claude writes *through* the symlink, so those edits land in
+this repo as a normal diff: run `git diff` after tweaking settings and commit
+what you want to keep. Two consequences worth knowing:
+
+- Paths inside it must be portable. Both the hook commands and `statusLine`
+  run in a shell, so use `$HOME/…`, never `/home/<user>/…`.
+- Never put secrets in it (e.g. an `env` block with an API token) — it's a
+  tracked file. Machine-local secrets belong in `~/.config/shell/local.sh`.
+
+On a machine that already has its own `~/.claude/settings.json`, `install.sh`
+moves it aside to `settings.json.pre-dotfiles.<epoch>` before stowing, so
+nothing is silently overwritten.
 
 ## Shell configuration
 
@@ -174,6 +192,32 @@ It runs automatically (report-only) at the end of `install.sh`, and uses
 `.gitignore` as the source of truth — anything intentionally per-machine
 (`local.sh`, `git/local`) is never flagged.
 
+### Drift in the other direction
+
+Some tracked files are rewritten by the tool that owns them rather than by you
+— Claude Code rewrites `claude/.claude/settings.json` on every `/config`,
+`/effort`, or `/fast` change, plugin toggle, and accepted dialog. Those edits
+land *inside* the repo, so stow and symlinks are all healthy; they just sit
+uncommitted until you happen to run `git status` in `~/dotfiles`.
+
+Two things watch for that:
+
+- **`doctor.sh`** reports uncommitted changes to the files listed in its
+  `AUTO_WRITTEN` array, plus any commits you haven't pushed (unpushed commits
+  aren't on your other machines, which defeats the point of the repo).
+- **`shell/.config/shell/drift.sh`** prints a two-line nudge at terminal
+  startup when either applies — so you hear about it even on a day you never
+  open Claude. Interactive shells only, ~5 ms, and rate-limited to once every
+  4 h so a wall of tmux panes doesn't each report it.
+
+    DOTFILES_DRIFT_NUDGE=0          # silence it
+    DOTFILES_DRIFT_NUDGE_HOURS=24   # nudge at most once a day
+    _dotfiles_drift_nudge force     # check right now, ignoring the rate limit
+
+Both are deliberately scoped to *machine-written* files rather than the whole
+repo: a warning that fires on every ordinary dotfiles edit is one you learn to
+ignore. Keep the list in `drift.sh` in sync with `AUTO_WRITTEN` in `doctor.sh`.
+
 **Not covered:** a brand-new tool writing to a location no package touches yet
 (e.g. `~/.config/bat/`). `~/.config` is too full of cache/state to scan blindly,
 so the workflow there is to notice the new tool and add it as a package
@@ -210,23 +254,10 @@ the window. The right side of the status bar aggregates across windows, e.g.
 `▲2 ●1`.
 
 **How it's wired.** Three Claude hooks (`UserPromptSubmit`, `Notification`,
-`Stop`) call `~/.config/tmux/scripts/agent-notify`, which sets a per-window
-`@agent_state` tmux option. `install.sh` merges these hooks into
-`~/.claude/settings.json` with `jq` (idempotent; backs up first; never
-overrides your own `preferredNotifChannel` or other hooks). That file is **not**
-symlinked because Claude rewrites it.
-
-Add the hooks manually if you skipped the merge — put this in
-`~/.claude/settings.json` (adjust the path):
-
-    {
-      "preferredNotifChannel": "terminal_bell",
-      "hooks": {
-        "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.config/tmux/scripts/agent-notify" }] }],
-        "Notification":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.config/tmux/scripts/agent-notify" }] }],
-        "Stop":             [{ "hooks": [{ "type": "command", "command": "~/.config/tmux/scripts/agent-notify" }] }]
-      }
-    }
+`Stop`) call `$HOME/.config/tmux/scripts/agent-notify`, which sets a per-window
+`@agent_state` tmux option. They're declared in the tracked
+`claude/.claude/settings.json`, stowed to `~/.claude/settings.json` — no merge
+step, so editing that file in the repo is all it takes.
 
 **Keys** (prefix is `C-a`): `M-h/j/k/l` move between panes, `M-H`/`M-L`
 previous/next window, `prefix S` toggles `synchronize-panes` (type into every
