@@ -12,6 +12,9 @@
 #
 # Files matched by .gitignore (local.sh, git/local, …) are treated as
 # intentionally per-machine and never reported.
+#
+# It also reports the reverse direction: config a TOOL rewrote inside the repo
+# (see AUTO_WRITTEN) that you haven't committed, and commits you haven't pushed.
 
 set -euo pipefail
 
@@ -89,8 +92,45 @@ for pkg in $PACKAGES; do
   done < <(owned_roots "$pkg")
 done
 
+# ── Machine-written config: uncommitted / unpushed ──────────
+# Some tracked files are rewritten by the tool that owns them, not by you:
+# Claude Code rewrites claude/.claude/settings.json whenever a setting changes
+# (/config, /effort, /fast, plugin toggles, accepted dialogs). Those edits land
+# in the repo silently — `git status` shows them only if you happen to look.
+#
+# Deliberately scoped to that list rather than the whole repo: flagging every
+# dotfiles edit would fire during normal work and train you to ignore it. The
+# signal worth having is "a tool changed config behind your back".
+AUTO_WRITTEN=(claude/.claude/settings.json)
+
+autodirty=()
+while IFS= read -r line; do
+  [ -n "$line" ] && autodirty+=("$line")
+done < <(git status --porcelain -- "${AUTO_WRITTEN[@]}" 2>/dev/null || true)
+
+# Committed but never pushed = the change isn't on your other machines yet,
+# which defeats the point of keeping this config in a repo at all.
+unpushed=0
+if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+  unpushed=$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+fi
+
 # ── Report ──────────────────────────────────────────────────
 found=0
+
+if [ "${#autodirty[@]}" -gt 0 ]; then
+  found=1
+  echo "▲ Machine-written config changed but not committed:"
+  for e in "${autodirty[@]}"; do echo "    $e"; done
+  echo "    review: git -C \"$DOTFILES_DIR\" diff -- ${AUTO_WRITTEN[*]}"
+  echo
+fi
+if [ "$unpushed" -gt 0 ]; then
+  found=1
+  echo "▲ $unpushed commit(s) not pushed — your other machines don't have them:"
+  echo "    fix: git -C \"$DOTFILES_DIR\" push"
+  echo
+fi
 
 if [ "${#untracked[@]}" -gt 0 ]; then
   found=1
@@ -135,5 +175,7 @@ if [ "$ADOPT" -eq 1 ] && [ "${#untracked[@]}" -gt 0 ]; then
   exit 0
 fi
 
-echo "Run './doctor.sh --adopt' to move untracked files into the repo, then commit."
+if [ "${#untracked[@]}" -gt 0 ]; then
+  echo "Run './doctor.sh --adopt' to move untracked files into the repo, then commit."
+fi
 exit 1
