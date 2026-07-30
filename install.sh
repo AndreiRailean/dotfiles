@@ -27,6 +27,21 @@ if ! command -v stow &>/dev/null; then
   pkg_install stow || { echo "Install GNU Stow manually."; exit 1; }
 fi
 
+# ── Hand ~/.claude files over to the repo (once per machine) ─
+# ~/.claude/settings.json is the live file Claude Code reads AND writes, so
+# it can't be stowed while a real file already sits there. Claude writes
+# *through* a symlink (verified: the link survives plugin/marketplace/config
+# writes), so we track the real file and let its edits land in the repo
+# instead of merging a patch into a machine-owned copy. Move any pre-existing
+# file aside once; the backup keeps machine-local keys for manual re-add.
+for f in settings.json statusline-command.sh; do
+  t="$HOME/.claude/$f"
+  if [ -e "$t" ] && [ ! -L "$t" ]; then
+    mv "$t" "$t.pre-dotfiles.$(date +%s)"
+    echo "Moved aside existing ~/.claude/$f — see $(basename "$t").pre-dotfiles.* backup"
+  fi
+done
+
 # ── Symlink packages into $HOME ──────────────────────────────
 # --no-folding: create real directories with per-file symlinks rather than
 # symlinking whole dirs into the repo. This keeps ~/.config/shell (etc.) a
@@ -87,7 +102,7 @@ ensure_tool bat bat batcat     # cat with syntax highlighting
 ensure_tool eza eza            # nicer ls
 ensure_tool ripgrep rg         # fast recursive grep
 ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
-ensure_tool jq jq             # JSON processor (Claude hook merge, tooling)
+ensure_tool jq jq              # JSON processor (Claude status line, agent-doctor)
 ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
 # delta (syntax-highlighted git diffs) — the package is git-delta on apt, brew
 # AND pacman. Not `delta`: on Debian/Ubuntu that name belongs to an unrelated
@@ -237,19 +252,6 @@ elif [ "$OS" = "Darwin" ]; then
 EOF
 fi
 echo "────────────────────────────────────────────────────────"
-
-# ── Claude Code agent hooks (tmux notifications) ─────────────
-# Idempotent jq-merge into ~/.claude/settings.json (NOT symlinked — Claude
-# rewrites that file). Safe to re-run; see claude-hooks-merge.sh.
-if command -v jq &>/dev/null; then
-  if "$DOTFILES_DIR/claude-hooks-merge.sh" "$HOME/.claude/settings.json" "$XDG_CONFIG_HOME/tmux/scripts"; then
-    echo "Wired Claude Code agent hooks into ~/.claude/settings.json"
-  else
-    echo "!! Claude hook merge failed — see README to add hooks manually"
-  fi
-else
-  echo "!! jq missing — skipped Claude hook merge (see README)"
-fi
 
 # ── Drift check ──────────────────────────────────────────────
 # Surface any config that lives next to managed files but isn't tracked
