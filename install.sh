@@ -253,6 +253,22 @@ EOF
 fi
 echo "────────────────────────────────────────────────────────"
 
+# ── herdr auto-layout daemon ─────────────────────────────────
+# Splits every new git-worktree workspace and opens a lazygit tab. herdr has no
+# on_worktree_create hook, so this is a socket-API subscriber that needs to be
+# running; see herdr/.config/herdr/scripts/herdr-autolayout.
+if command -v systemctl &>/dev/null && systemctl --user show-environment &>/dev/null; then
+  systemctl --user daemon-reload
+  if systemctl --user enable --now herdr-autolayout.service &>/dev/null; then
+    echo "Enabled herdr-autolayout.service (user unit)"
+  else
+    echo "!! could not enable herdr-autolayout.service — run: systemctl --user enable --now herdr-autolayout.service"
+  fi
+else
+  echo "!! no systemd --user — start the herdr auto-layout daemon yourself:"
+  echo "   ~/.config/herdr/scripts/herdr-autolayout &"
+fi
+
 # ── Drift check ──────────────────────────────────────────────
 # Surface any config that lives next to managed files but isn't tracked
 # (see doctor.sh). Report-only; never blocks the install.

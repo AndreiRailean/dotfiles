@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""Auto-arrange every new herdr git-worktree workspace.
+
+When a worktree workspace appears, do the two things I always do by hand:
+split the root pane side-by-side, and open a lazygit tab.
+
+herdr has no declarative hook for this (no on_worktree_create in config.toml,
+and `herdr integration` is only for agent integrations), so this subscribes to
+the socket API's event stream instead. That keeps the native prefix+shift+G
+flow untouched and fires however the worktree was made — TUI, CLI, or API.
+
+Two quirks of the 0.7.5 API this works around:
+
+  * `events.wait` looks like it can match workspace events, but the server
+    replies `unsupported_event_wait_match` ("currently supports pane agent
+    status matches"). So we use events.subscribe, not wait.
+  * `SubscriptionEventKind` in the bundled schema only enumerates three
+    pane.* kinds, yet workspace_created IS delivered on a subscription.
+    Verified against a live server; the schema under-documents it.
+
+Because both of those are undocumented behaviour, a herdr upgrade could
+change them. Failures are logged and the loop reconnects rather than dying,
+so the worst case is layouts silently stop happening — never a broken herdr.
+
+Config via environment (all optional):
+  HERDR_AUTOLAYOUT_DIRECTION   right (default) | down
+  HERDR_AUTOLAYOUT_RATIO       split ratio, e.g. 0.5
+  HERDR_AUTOLAYOUT_LAZYGIT     1 (default) | 0 to skip the lazygit tab
+  HERDR_AUTOLAYOUT_LAZYGIT_CMD command for the tab (default: lazygit)
+  HERDR_AUTOLAYOUT_FOCUS_LAZYGIT  0 (default) leaves focus in the code pane
+  HERDR_AUTOLAYOUT_SPLIT_FOCUS 1 (default) focuses the new split pane
+  HERDR_SOCK                   socket path override
+"""
+
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+XDG_CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+XDG_STATE = os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state")
+
+SOCK = os.environ.get("HERDR_SOCK") or os.path.join(XDG_CONFIG, "herdr", "herdr.sock")
+LOG = os.path.join(XDG_STATE, "herdr", "autolayout.log")
+
+DIRECTION = os.environ.get("HERDR_AUTOLAYOUT_DIRECTION", "right")
+RATIO = os.environ.get("HERDR_AUTOLAYOUT_RATIO", "")
+WANT_LAZYGIT = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT", "1") != "0"
+LAZYGIT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_CMD", "lazygit")
+FOCUS_LAZYGIT = os.environ.get("HERDR_AUTOLAYOUT_FOCUS_LAZYGIT", "0") == "1"
+SPLIT_FOCUS = os.environ.get("HERDR_AUTOLAYOUT_SPLIT_FOCUS", "1") != "0"
+
+# Runtime state lives outside ~/.config/herdr on purpose: doctor.sh treats that
+# directory as a managed tree and would report a stray real file as drift.
+os.makedirs(os.path.dirname(LOG), exist_ok=True)
+
+
+def log(msg):
+    line = f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {msg}"
+    try:
+        with open(LOG, "a") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        pass
+    print(line, file=sys.stderr, flush=True)
+
+
+def herdr(*args, timeout=15, quiet=False):
+    """Run a herdr CLI command, returning parsed JSON when it emits any.
+
+    quiet suppresses the failure log for calls where a non-zero exit is an
+    expected outcome rather than a problem.
+    """
+    try:
+        p = subprocess.run(
+            ["herdr", *args], capture_output=True, text=True, timeout=timeout
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        log(f"  ! herdr {' '.join(args)} failed: {exc}")
+        return None
+    if p.returncode != 0:
+        if not quiet:
+            log(f"  ! herdr {' '.join(args)} exit {p.returncode}: {p.stderr.strip()[:200]}")
+        return None
+    out = (p.stdout or "").strip()
+    if not out:
+        return {}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return {}
+
+
+def panes_of(workspace_id):
+    """Set of pane ids in a workspace, plus a pane_id -> tab_id map."""
+    data = herdr("pane", "list", "--workspace", workspace_id) or {}
+    result = data.get("result", data)
+    panes = result.get("panes") if isinstance(result, dict) else None
+    if not isinstance(panes, list):
+        return set(), {}
+    ids = {p.get("pane_id") for p in panes if p.get("pane_id")}
+    tabs = {p.get("pane_id"): p.get("tab_id") for p in panes if p.get("pane_id")}
+    return ids, tabs
+
+
+def root_pane(workspace_id, tab_id, attempts=10):
+    """The first pane of tab_id. Retried: the pane may not exist yet."""
+    for _ in range(attempts):
+        ids, tabs = panes_of(workspace_id)
+        in_tab = sorted(pid for pid in ids if tabs.get(pid) == tab_id)
+        if in_tab:
+            return in_tab[0]
+        time.sleep(0.15)
+    return None
+
+
+def pristine(ws_id):
+    """Is this workspace still a single untouched pane in a single tab?
+
+    Subscribing replays recent workspace_created events, so a restart would
+    otherwise re-arrange workspaces that were already set up (or ones since
+    deleted). Requiring a 1-tab/1-pane workspace makes arranging idempotent:
+    anything already split, already given a lazygit tab, or already gone is
+    left alone. Returns None when the workspace no longer exists.
+    """
+    # A replayed event can name a workspace that no longer exists; that is a
+    # normal outcome here, not an error worth logging.
+    data = herdr("workspace", "get", ws_id, quiet=True)
+    if not data:
+        return None
+    ws = (data.get("result") or {}).get("workspace")
+    if not ws:
+        return None
+    return ws.get("tab_count") == 1 and ws.get("pane_count") == 1
+
+
+def arrange(ws):
+    ws_id = ws.get("workspace_id")
+    tab_id = ws.get("active_tab_id")
+    wt = ws.get("worktree") or {}
+    cwd = wt.get("checkout_path")
+    label = ws.get("label")
+
+    state = pristine(ws_id)
+    if state is None:
+        log(f"skip {ws_id} ({label}): workspace is gone (replayed event)")
+        return
+    if not state:
+        log(f"skip {ws_id} ({label}): already has extra tabs/panes")
+        return
+
+    log(f"worktree workspace {ws_id} ({label}) at {cwd}")
+
+    pane = root_pane(ws_id, tab_id)
+    if not pane:
+        log(f"  ! no pane found in {tab_id}; skipping")
+        return
+
+    split = ["pane", "split", "--pane", pane, "--direction", DIRECTION]
+    if SPLIT_FOCUS:
+        split.append("--focus")
+    if RATIO:
+        split += ["--ratio", RATIO]
+    if cwd:
+        split += ["--cwd", cwd]
+    if herdr(*split) is None:
+        log("  ! split failed")
+    else:
+        log(f"  split {pane} {DIRECTION}")
+
+    if not WANT_LAZYGIT:
+        return
+
+    # `herdr tab create` has no --command, so create the tab and then type into
+    # its pane. Diff the pane set to find the new one: tab create's output shape
+    # is not guaranteed to carry a pane id.
+    before, _ = panes_of(ws_id)
+    tab_args = ["tab", "create", "--workspace", ws_id, "--label", "lazygit"]
+    if cwd:
+        tab_args += ["--cwd", cwd]
+    tab_args.append("--focus" if FOCUS_LAZYGIT else "--no-focus")
+    if herdr(*tab_args) is None:
+        log("  ! lazygit tab creation failed")
+        return
+
+    new = set()
+    for _ in range(10):
+        after, _ = panes_of(ws_id)
+        new = after - before
+        if new:
+            break
+        time.sleep(0.15)
+    if not new:
+        log("  ! could not identify the new tab's pane; lazygit not started")
+        return
+    target = sorted(new)[0]
+    if herdr("pane", "send-text", target, LAZYGIT_CMD + "\n") is None:
+        log("  ! send-text failed")
+    else:
+        log(f"  lazygit tab pane {target}")
+
+
+def handle(event, seen):
+    if event.get("event") != "workspace_created":
+        return
+    ws = (event.get("data") or {}).get("workspace") or {}
+    wt = ws.get("worktree") or {}
+    # Only linked worktrees. A workspace opened on a repo's main checkout also
+    # carries a worktree block, with is_linked_worktree false.
+    if not wt.get("is_linked_worktree"):
+        return
+    ws_id = ws.get("workspace_id")
+    if not ws_id or ws_id in seen:
+        return
+    seen.add(ws_id)
+    if len(seen) > 500:
+        seen.clear()
+        seen.add(ws_id)
+    try:
+        arrange(ws)
+    except Exception as exc:  # never let one bad event kill the daemon
+        log(f"  ! arrange raised: {exc!r}")
+
+
+def run_once(seen):
+    """One connected session. Returns when the connection ends."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(SOCK)
+    req = {
+        "id": "autolayout",
+        "method": "events.subscribe",
+        "params": {"subscriptions": [{"type": "workspace.created"}]},
+    }
+    s.sendall((json.dumps(req) + "\n").encode())
+    log(f"subscribed via {SOCK}")
+    buf = b""
+    with s:
+        while True:
+            chunk = s.recv(65536)
+            if not chunk:
+                return
+            buf += chunk
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if msg.get("error"):
+                    log(f"  ! server error: {json.dumps(msg['error'])[:200]}")
+                    continue
+                handle(msg, seen)
+
+
+def main():
+    seen = set()
+    backoff = 1
+    while True:
+        try:
+            run_once(seen)
+            log("connection closed; reconnecting")
+            backoff = 1
+        except (FileNotFoundError, ConnectionRefusedError):
+            # herdr server not up yet (or restarting for an update).
+            pass
+        except OSError as exc:
+            log(f"socket error: {exc}")
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 30)
+
+
+if __name__ == "__main__":
+    main()

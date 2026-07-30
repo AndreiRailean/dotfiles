@@ -13,3 +13,7 @@ herdr/.config/herdr/*.log
 herdr/.config/herdr/*.sock
 herdr/.config/herdr/session.json
 herdr/.config/herdr/.plugins.lock
+
+# Python bytecode from running the herdr auto-layout daemon or py_compile.
+__pycache__/
+*.pyc

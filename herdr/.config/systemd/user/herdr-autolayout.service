@@ -1,0 +1,17 @@
+[Unit]
+Description=herdr auto-layout for new git worktree workspaces
+Documentation=file:///%h/.config/herdr/scripts/herdr-autolayout
+
+[Service]
+Type=simple
+ExecStart=%h/.config/herdr/scripts/herdr-autolayout
+# systemd --user does not inherit the interactive shell PATH, and herdr lives
+# in ~/.local/bin. The daemon shells out to `herdr`, so it needs this.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# The daemon already reconnects on its own when the herdr server restarts (an
+# update, say). This is only a backstop for an unexpected crash.
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
