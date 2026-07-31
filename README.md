@@ -312,10 +312,10 @@ conflict — adopt it with `./doctor.sh --adopt` or remove it first.
 Every new git-worktree workspace gets the same treatment automatically:
 
 ```
-┌────────────────┬────────────────┐   tab 1
+┌────────────────┬────────────────┐   tab 1: "claude"
 │ claude         │ plain shell    │   left pane focused
 └────────────────┴────────────────┘
-tab 2: lazygit
+tab 2: "lazygit"
 ```
 
 herdr has **no declarative hook** for this — there's no `on_worktree_create` in
@@ -363,6 +363,8 @@ herdr-autolayout`) — `HERDR_AUTOLAYOUT_` plus:
 | `LEFT_CMD` | left pane command (default `claude`; empty = plain shell) |
 | `RIGHT_CMD` | right pane command (default: none, just a shell) |
 | `LAZYGIT_CMD` | lazygit tab command (empty skips the tab entirely) |
+| `MAIN_TAB` | first tab's label (default `claude`; empty keeps herdr's number) |
+| `LAZYGIT_TAB` | lazygit tab's label (default `lazygit`) |
 | `FOCUS` | `left` (default) / `right` / `lazygit` / `none` |
 | `DIRECTION` | `right` (default) / `down` |
 | `RATIO` | split ratio, e.g. `0.5` |
