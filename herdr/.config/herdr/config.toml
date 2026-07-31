@@ -1,5 +1,30 @@
 # herdr configuration — managed by dotfiles.
 #
+# ┌─ RETEST AFTER A herdr UPGRADE ────────────────────────────────────────────┐
+# │ Last verified against: herdr 0.7.5                                        │
+# │                                                                           │
+# │ The worktree auto-layout (scripts/herdr-autolayout, prefix+shift+L, and   │
+# │ herdr-autolayout.service) rests on two behaviours the API does NOT        │
+# │ document, so an upgrade can silently break it:                            │
+# │                                                                           │
+# │   1. `workspace_created` is delivered on an events.subscribe stream even  │
+# │      though SubscriptionEventKind does not list it.                       │
+# │   2. `events.wait` rejects workspace matches its schema advertises        │
+# │      (unsupported_event_wait_match), which is why we subscribe instead.   │
+# │                                                                           │
+# │ It fails soft — layouts just stop happening, herdr itself keeps working — │
+# │ so the failure is easy to miss. After `herdr update`, retest:             │
+# │                                                                           │
+# │   herdr --version                       # note the new version            │
+# │   prefix+shift+G                        # make a throwaway worktree       │
+# │   # expect: "claude | lazygit" tabs, claude left, focus left              │
+# │   tail ~/.local/state/herdr/autolayout.log                                │
+# │   prefix+shift+L                        # and the manual path             │
+# │                                                                           │
+# │ If it broke, both suspects and the reasoning are in the docstring of      │
+# │ scripts/herdr-autolayout. Bump the version above once it passes.          │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
 # Only a few settings are pinned here; everything else uses herdr's defaults
 # (it auto-detects agents with zero config). Run `herdr --default-config` to
 # see the full set of options.
