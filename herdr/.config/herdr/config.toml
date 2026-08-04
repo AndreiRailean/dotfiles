@@ -59,3 +59,6 @@ type = "popup"
 command = "$HOME/.config/herdr/scripts/herdr-autolayout arrange"
 width = "70%"
 height = "50%"
+
+[ui]
+agent_panel_sort = "priority"
