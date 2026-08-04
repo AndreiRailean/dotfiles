@@ -14,14 +14,21 @@ dies.
 
 ## Decisions
 
-- **Install: package manager first, GitHub release as fallback.** `pkg_install
-  lazygit` covers brew and pacman (both current) and Debian trixie (0.50). It
-  does *not* cover older Ubuntu LTS, where lazygit is absent from the archive
-  entirely — hence the tarball fallback into `~/.local/bin`, the same shape as
-  the existing win32yank / starship / herdr blocks. Best-effort: a failure
-  prints `!!` and continues, never aborts the install.
-- **No version pin.** Resolve the latest release at install time. lazygit is a
-  single static binary with no config-format churn worth pinning against.
+- **Install: upstream release, gated on a version floor of 0.64.0.** Not the
+  system package. lazygit 0.64 replaced the `git.paging` config block with
+  `git.diffRenderers`, and an older binary ignores the new keys *silently* — no
+  warning, no delta, no signal. Debian trixie ships 0.50 and older Ubuntu ships
+  nothing at all, so the package manager cannot be relied on to clear the floor.
+  A single static binary in `~/.local/bin` can, and `~/.local/bin` precedes
+  `/usr/bin` (`shell/.config/shell/path.sh:14`), so it supersedes a distro
+  lazygit that's already installed. Same shape as the existing starship and
+  herdr blocks. Best-effort: a failure prints `!!` and continues.
+- **The floor is a version check, not just a presence check.** A machine that
+  already has 0.50 from apt must be *upgraded*, not skipped — so the guard asks
+  "is lazygit ≥ 0.64 on PATH", not "is lazygit on PATH". brew and pacman track
+  current, so on those platforms an already-installed lazygit clears the floor
+  and is left alone.
+- **No upper version pin.** Resolve the latest release at install time.
 - **Config is managed, and diverges from the git config on one point:** delta
   without `--side-by-side`. See "The side-by-side divergence" below.
 - **lazygit's own state stays out of the repo** via a scoped `.gitignore`
@@ -44,12 +51,17 @@ Shape (illustrative, not final code):
 
 ```bash
 # ── lazygit (git TUI; the herdr auto-layout tab runs it) ─────
-if ! command -v lazygit &>/dev/null; then
+if ! lazygit_meets_floor; then
   echo "Installing lazygit..."
-  pkg_install lazygit || install_lazygit_release \
+  install_lazygit_release \
     || echo "!! lazygit install failed — install manually: https://github.com/jesseduffield/lazygit"
 fi
 ```
+
+`lazygit_meets_floor` parses `version=<x.y.z>` out of `lazygit --version` and
+returns 0 only when the version is ≥ 0.64.0. A missing binary, unparseable
+output, or an older version all return 1. No `sort -V` — that's GNU-only;
+compare the major and minor components numerically.
 
 `install_lazygit_release`, a helper defined alongside the block:
 
@@ -69,18 +81,37 @@ needs it.
 
 ### Config
 
-`lazygit/.config/lazygit/config.yml`:
+`lazygit/.config/lazygit/config.yml`, on the 0.64 schema:
 
-- `git.paging.pager` — delta, **not** side-by-side (see below).
-- `git.paging.colorArg: always` — delta needs color forced through the pipe.
+- `git.diffRenderers` — a single-entry array. `type` is left at its
+  `stdinFilter` default.
+  - `command` — delta, **not** side-by-side (see below).
+  - `colorArg: always` — delta needs color forced through the pipe.
+  - `name: delta` — shown when cycling renderers. Not cosmetic filler: the
+    default is derived from the command's *first word*, and ours begins
+    `command -v delta …`, so without this the renderer displays as "command".
 - `os.editPreset: nvim` — matches `EDITOR`/`VISUAL` from `shell/…/env.sh`
   instead of letting lazygit guess.
 - `gui.nerdFontsVersion: "3"` — the install already places Monaspace Nerd Font,
   so lazygit may use glyphs.
 
-Every key is to be verified against `lazygit --config` (which prints the
-default config, and therefore the authoritative schema for the installed
-version) rather than written from memory.
+Verified against the v0.64.0 `DiffRendererConfig` JSON schema
+(`schema/config.json`) and `lazygit --config`, not written from memory.
+
+#### Why not `git.paging`
+
+The pre-0.64 form works on both versions — 0.64 migrates it in memory — but it
+migrates *on disk* too, rewriting the tracked file through the stow symlink on
+first launch (verified: `git.paging` → `git.diffRenderers[]`, `pager` →
+`command`, comments preserved). Shipping the current schema avoids a config the
+tool rewrites behind you. The trade-off accepted deliberately: this config
+requires lazygit ≥ 0.64, which is what the install's version floor guarantees.
+
+A *future* schema migration would rewrite the file the same way. It would
+surface as ordinary `git status` drift in this repo, which is signal enough —
+`.auto-written` is for files a tool rewrites routinely, and registering one that
+gets rewritten once per major version would make the drift nudge fire on every
+hand edit instead.
 
 #### The side-by-side divergence (crux)
 
@@ -121,6 +152,10 @@ helpers, `pass`/`fail`/`assert_eq`, `finish`):
 - **Behavioural pager check**, mirroring `test-git-delta.sh`: run the real pager
   expression with a stubbed `delta` on a narrowed `PATH` and assert delta is
   invoked; remove the stub and assert it falls back instead of failing.
+- The config uses the 0.64 `diffRenderers`/`command` keys, not the migrated-away
+  `paging`/`pager` ones.
+- The version floor: a stubbed `lazygit` reporting 0.50.0 does not clear it; one
+  reporting 0.64.0 does; a missing binary does not.
 - The pager expression does not contain `--side-by-side` (locks in the
   divergence above, so it survives a future copy-paste from the git config).
 - `install.sh` contains the lazygit install block and stows the `lazygit`
