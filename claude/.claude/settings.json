@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "defaultMode": "auto"
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -46,7 +49,8 @@
     "commit-commands@claude-plugins-official": true,
     "supabase@claude-plugins-official": true,
     "stripe@claude-plugins-official": true,
-    "mattpocock-skills@mattpocock": true
+    "mattpocock-skills@mattpocock": true,
+    "mattpocock-skills@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "mattpocock": {
@@ -56,11 +60,12 @@
       }
     }
   },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "fastModePerSessionOptIn": true,
   "theme": "auto",
   "preferredNotifChannel": "terminal_bell",
-  "permissions": {
-    "defaultMode": "auto"
-  },
-  "skipAutoPermissionPrompt": true,
-  "fastModePerSessionOptIn": true
+  "skipAutoPermissionPrompt": true
 }
