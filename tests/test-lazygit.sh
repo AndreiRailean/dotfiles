@@ -1,7 +1,8 @@
 #!/bin/sh
-# lazygit package: the binary is installed by install.sh (package manager first,
-# upstream release tarball as fallback), the config pins the intended settings,
-# lazygit's own state stays out of the repo, and the package is wired into
+# lazygit package: the binary is installed by install.sh from the upstream
+# release ONLY, gated on a >= 0.64.0 version floor (Amendment 1 — never the
+# distro package), the config pins the intended settings, lazygit's own
+# state stays out of the repo, and the package is wired into
 # install.sh / doctor.sh.
 HERE="$(dirname "$0")"
 . "$HERE/lib.sh"
@@ -24,16 +25,16 @@ else
 fi
 
 grep -q 'install_lazygit_release' "$INST" \
-  && pass "install.sh has a release fallback" \
-  || fail "install.sh has a release fallback"
+  && pass "install.sh installs lazygit from the upstream release" \
+  || fail "install.sh installs lazygit from the upstream release"
 
-# Upstream publishes lazygit_<version>_<Os>_<Arch>.tar.gz; the asset carries the
-# version WITHOUT the tag's leading v. Getting this string wrong makes the
-# fallback dead weight on the one platform that needs it (Ubuntu LTS, where
-# lazygit is absent from the archive entirely).
+# Upstream publishes lazygit_<version>_<Os>_<Arch>.tar.gz; the asset carries
+# the version WITHOUT the tag's leading v. Getting this string wrong makes
+# the install dead on arrival — the release tarball is the only path lazygit
+# is ever installed through now (Amendment 1: never the distro package).
 grep -q 'jesseduffield/lazygit/releases/download' "$INST" \
-  && pass "release fallback points at the upstream download URL" \
-  || fail "release fallback points at the upstream download URL"
+  && pass "the release install points at the upstream download URL" \
+  || fail "the release install points at the upstream download URL"
 
 grep -q 'lazygit_${ver}_${os}_${arch}.tar.gz' "$INST" \
   && pass "release asset name matches upstream's naming" \
