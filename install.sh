@@ -274,7 +274,11 @@ install_lazygit_release() {
 # field that follows lazygit's own version, or a greedy `.*` grabs git's
 # version instead and the floor check would pass on git's major version, not
 # lazygit's. Compare major/minor numerically — no `sort -V`, it's GNU-only
-# and this script also runs on macOS.
+# and this script also runs on macOS. Only major/minor are compared because
+# the floor's patch is 0 today; if a future floor bump needs a patch (e.g.
+# 0.64.2), extend this comparison to include it. doctor.sh's "lazygit version
+# health" check duplicates this comparison for reporting (no shared shell lib
+# between the two scripts) — keep both in sync if the floor value changes.
 lazygit_meets_floor() {
   local out ver major minor
   command -v lazygit &>/dev/null || return 1

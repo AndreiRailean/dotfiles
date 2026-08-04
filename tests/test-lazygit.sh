@@ -199,6 +199,49 @@ rc="$(run_floor "not a version line at all")"
 [ "$rc" = "1" ] && pass "floor: unparseable --version output does not meet the floor" \
   || fail "floor: unparseable --version output does not meet the floor (got '${rc:-?}')"
 
+# ── doctor.sh: lazygit version health ────────────────────────
+# install.sh only clears the floor at install time; nothing else re-checks
+# it afterwards. If the floor is unmet and install_lazygit_release also
+# fails (no network, a GitHub API rate limit, an unsupported arch, ...), a
+# machine is left reading the managed diffRenderers config with a binary
+# that ignores it silently — the exact failure mode this branch exists to
+# prevent. Extract doctor.sh's block and drive it the same way as the floor
+# tests above: a stubbed `lazygit` on a minimal PATH, never the real system
+# PATH.
+FN3="$(mktemp -d)/health.sh"
+sed -n '/^# ── lazygit version health/,/^fi$/p' "$REPO/doctor.sh" > "$FN3"
+
+# $1: the line a stubbed `lazygit --version` should print, or empty for no
+# lazygit binary on PATH at all.
+run_health() {
+  d="$(mktemp -d)"
+  ln -s "$SEDBIN" "$d/sed"
+  if [ -n "$1" ]; then
+    printf '%s\n' "$1" > "$d/out.txt"
+    cat > "$d/lazygit" <<STUB
+#!/bin/sh
+IFS= read -r line < "$d/out.txt"
+echo "\$line"
+STUB
+    chmod +x "$d/lazygit"
+  fi
+  export FN3 d
+  out="$(bash -c 'PATH="$d"; ADOPT=0; . "$FN3"' 2>/dev/null)"
+  rm -rf "$d"
+  printf '%s' "$out"
+}
+
+out="$(run_health "$VER_APT_050")"
+assert_contains "$out" "below the 0.64 floor" "doctor.sh warns when lazygit is below the floor"
+
+out="$(run_health "$VER_REL_064")"
+assert_not_contains "$out" "below the 0.64 floor" "doctor.sh stays quiet when lazygit meets the floor"
+
+out="$(run_health "")"
+assert_not_contains "$out" "below the 0.64 floor" "doctor.sh stays quiet when lazygit is missing (that's louder, elsewhere)"
+
+rm -rf "$(dirname "$FN3")"
+
 rm -rf "$(dirname "$FN2")"
 
 # ── The lazygit Stow package ─────────────────────────────────

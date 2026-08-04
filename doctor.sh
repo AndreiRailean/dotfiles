@@ -46,6 +46,34 @@ if [ "$ADOPT" -eq 0 ] && command -v nvim >/dev/null 2>&1 && command -v vim >/dev
   fi
 fi
 
+# ── lazygit version health (report-only; never affects drift) ───
+# install.sh's lazygit_meets_floor guarantees >= 0.64.0 on install, but this
+# doesn't re-run on every shell — a machine that already had apt's older
+# lazygit before install.sh last ran, or one that fell back to it when
+# install_lazygit_release failed (no network, GitHub API rate-limited,
+# unsupported arch, ...), can be left with a stale binary silently reading
+# the managed config's git.diffRenderers and ignoring it: no delta, no
+# warning, nothing from lazygit itself. Duplicates install.sh's
+# lazygit_meets_floor comparison (no shared shell lib between the two
+# scripts) — keep both in sync if the floor value ever changes. A missing
+# lazygit is louder and different; only warn here when it's present and
+# below the floor.
+if [ "$ADOPT" -eq 0 ] && command -v lazygit >/dev/null 2>&1; then
+  lg_out="$(lazygit --version 2>/dev/null)" || lg_out=""
+  lg_ver="$(printf '%s\n' "$lg_out" | sed -n 's/.*version=[^0-9]*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)[^,]*, *os=.*/\1/p')"
+  lg_major="${lg_ver%%.*}"
+  lg_minor="${lg_ver#*.}"; lg_minor="${lg_minor%%.*}"
+  case "$lg_major" in ''|*[!0-9]*) lg_major="" ;; esac
+  case "$lg_minor" in ''|*[!0-9]*) lg_minor="" ;; esac
+  if [ -n "$lg_ver" ] && [ -n "$lg_major" ] && [ -n "$lg_minor" ] \
+     && [ "$lg_major" -eq 0 ] && [ "$lg_minor" -lt 64 ]; then
+    echo "▲ lazygit $lg_ver is below the 0.64 floor — the managed config's git.diffRenderers"
+    echo "    is ignored silently (no delta, no warning)."
+    echo "    fix: re-run ./install.sh"
+    echo
+  fi
+fi
+
 untracked=()   # "target|pkg|rel"
 broken=()      # dangling symlinks
 missing=()     # repo files not linked into $HOME
