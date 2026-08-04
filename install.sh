@@ -218,6 +218,50 @@ if ! command -v herdr &>/dev/null; then
     || echo "!! herdr install failed — install manually: https://herdr.dev"
 fi
 
+# ── lazygit (git TUI) ────────────────────────────────────────
+# Must come before the auto-layout section at the end of this script: that
+# daemon opens a `lazygit` tab in every new worktree, so without the binary a
+# fresh machine gets a tab that dies on launch.
+#
+# Package managers first — brew and pacman track current, Debian trixie has
+# 0.50 — but lazygit is missing from older Ubuntu's archive entirely, so fall
+# back to the upstream release tarball into ~/.local/bin (same shape as the
+# win32yank block above).
+install_lazygit_release() {
+  local ver os arch url tmp
+  ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
+         | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)" || return 1
+  [ -n "$ver" ] || return 1
+  case "$(uname -s)" in
+    Linux)  os=Linux  ;;
+    Darwin) os=Darwin ;;
+    *) return 1 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64)  arch=x86_64 ;;
+    arm64|aarch64) arch=arm64  ;;
+    *) return 1 ;;
+  esac
+  # Asset name repeats the version WITHOUT the tag's leading v.
+  url="https://github.com/jesseduffield/lazygit/releases/download/v${ver}/lazygit_${ver}_${os}_${arch}.tar.gz"
+  tmp="$(mktemp -d)" || return 1
+  if curl -fsSL "$url" -o "$tmp/lazygit.tar.gz" \
+     && tar -xzf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit; then
+    mkdir -p "$HOME/.local/bin"
+    install -m 755 "$tmp/lazygit" "$HOME/.local/bin/lazygit"
+    rm -rf "$tmp"
+    return 0
+  fi
+  rm -rf "$tmp"
+  return 1
+}
+
+if ! command -v lazygit &>/dev/null; then
+  echo "Installing lazygit..."
+  pkg_install lazygit || install_lazygit_release \
+    || echo "!! lazygit install failed — install manually: https://github.com/jesseduffield/lazygit/releases"
+fi
+
 # ── Nerd Font (best-effort; see note printed at end) ─────────
 FONT_ARCHIVE="Monaspace"                    # the release .zip name
 FONT_FACE="MonaspiceAr Nerd Font Mono"      # what you select in the terminal
