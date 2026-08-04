@@ -247,10 +247,11 @@ install_lazygit_release() {
   tmp="$(mktemp -d)" || return 1
   if curl -fsSL "$url" -o "$tmp/lazygit.tar.gz" \
      && tar -xzf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit; then
-    mkdir -p "$HOME/.local/bin"
-    install -m 755 "$tmp/lazygit" "$HOME/.local/bin/lazygit"
-    rm -rf "$tmp"
-    return 0
+    if mkdir -p "$HOME/.local/bin" \
+       && install -m 755 "$tmp/lazygit" "$HOME/.local/bin/lazygit"; then
+      rm -rf "$tmp"
+      return 0
+    fi
   fi
   rm -rf "$tmp"
   return 1
