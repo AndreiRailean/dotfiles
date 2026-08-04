@@ -44,6 +44,7 @@ claude/.claude/statusline-command.sh -> ~/.claude/statusline-command.sh
 herdr/.config/herdr/config.toml -> ~/.config/herdr/config.toml
 herdr/.config/herdr/scripts/    -> ~/.config/herdr/scripts/
 herdr/.config/systemd/user/     -> ~/.config/systemd/user/
+lazygit/.config/lazygit/config.yml -> ~/.config/lazygit/config.yml
 ```
 
 Everything is XDG-based (`~/.config`, `~/.local/share`, …).
@@ -156,6 +157,22 @@ the running git accepts it.
 
 `$PAGER` itself stays plain `less`, so non-interactive callers (`man`,
 `systemctl`, …) are unaffected.
+
+[lazygit](https://github.com/jesseduffield/lazygit) reuses delta for its own
+diffs, with the same guarded `|| less` fallback — but adds `--no-gitconfig`, so
+it ignores the `delta` block above. That's deliberate: `side-by-side` is right
+for a diff filling the terminal and unreadable in lazygit's half-width panel,
+and delta's `--side-by-side` is a plain flag that can't be switched off with
+`=false`.
+
+`install.sh` installs lazygit from the **upstream release**, not the distro
+package, and gates on a version floor of **0.64.0** — upgrading an older binary
+rather than skipping it. 0.64 replaced the `git.paging` config block with
+`git.diffRenderers`, which is what `lazygit/.config/lazygit/config.yml` uses;
+older lazygit ignores those keys silently, so a Debian-packaged 0.50 would give
+you no delta and no warning. If a future lazygit migrates the schema again it
+rewrites the config in place, through the stow symlink — that shows up as
+ordinary drift in `git status` here.
 
 ## Per-machine settings
 
@@ -317,6 +334,9 @@ Every new git-worktree workspace gets the same treatment automatically:
 └────────────────┴────────────────┘
 tab 2: "lazygit"
 ```
+
+`install.sh` installs lazygit itself, so the tab has a binary behind it on a
+fresh machine; set `HERDR_AUTOLAYOUT_LAZYGIT_CMD=` to skip the tab entirely.
 
 herdr has **no declarative hook** for this — there's no `on_worktree_create` in
 `config.toml`, and `herdr integration` only manages agent integrations. So
