@@ -203,26 +203,51 @@ CONF="$REPO/lazygit/.config/lazygit/config.yml"
 
 [ -f "$CONF" ] && pass "config.yml exists" || fail "config.yml exists"
 
-# Valid YAML (skip where PyYAML isn't available)
+# Valid YAML, and (where PyYAML is available) shaped the way lazygit's
+# DiffRendererConfig schema expects: git.diffRenderers is a list, and its
+# first element carries the name/colorArg/command triple this file relies on.
 if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' 2>/dev/null; then
-  if python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' "$CONF" 2>/dev/null; then
-    pass "config.yml is valid YAML"
+  if python3 - "$CONF" <<'PY' 2>/dev/null
+import sys, yaml
+data = yaml.safe_load(open(sys.argv[1]))
+renderers = data["git"]["diffRenderers"]
+assert isinstance(renderers, list) and len(renderers) >= 1
+first = renderers[0]
+assert first.get("name") == "delta"
+assert first.get("colorArg") == "always"
+assert isinstance(first.get("command"), str) and first["command"]
+PY
+  then
+    pass "config.yml is valid YAML shaped as a diffRenderers list"
   else
-    fail "config.yml is valid YAML"
+    fail "config.yml is valid YAML shaped as a diffRenderers list"
   fi
 else
   echo "  skip: python3 PyYAML unavailable (YAML validation)"
 fi
 
 # Pinned settings
+grep -q 'name: delta'           "$CONF" && pass "diff renderer named delta" || fail "diff renderer named delta"
 grep -q 'colorArg: always'      "$CONF" && pass "colorArg always"       || fail "colorArg always"
 grep -q 'editPreset: nvim'      "$CONF" && pass "editPreset nvim"       || fail "editPreset nvim"
 grep -q 'nerdFontsVersion: "3"' "$CONF" && pass "nerdFontsVersion 3"    || fail "nerdFontsVersion 3"
 
+# ── Schema regression guard (Amendment 1) ────────────────────
+# lazygit >= 0.64 replaced git.paging with git.diffRenderers; below the floor
+# a binary ignores diffRenderers silently, so the old paging/pager shape
+# must never quietly creep back in via a migration or a copy-paste from an
+# older example / from git/.config/git/config.
+grep -q 'diffRenderers:' "$CONF" && pass "config uses the diffRenderers schema" || fail "config uses the diffRenderers schema"
+grep -Eq '^[[:space:]]*paging:' "$CONF" && fail "config doesn't reintroduce the old paging block" || pass "config doesn't reintroduce the old paging block"
+# Anchored to line-start (after whitespace) so prose like "git's core.pager:"
+# in a comment doesn't false-positive on the substring "pager:".
+grep -Eq '^[[:space:]]*pager:' "$CONF" && fail "config doesn't reintroduce the old pager key" || pass "config doesn't reintroduce the old pager key"
+
 # ── The pager expression ─────────────────────────────────────
-# Single-quoted YAML scalar, so plain sed extraction works and the behavioural
-# check below needs no YAML parser.
-PAGER_EXPR="$(sed -n "s/^[[:space:]]*pager:[[:space:]]*'\(.*\)'[[:space:]]*\$/\1/p" "$CONF" | head -1)"
+# Single-quoted YAML scalar (now the diffRenderers[0].command field), so
+# plain sed extraction still works and the behavioural check below needs no
+# YAML parser.
+PAGER_EXPR="$(sed -n "s/^[[:space:]]*command:[[:space:]]*'\(.*\)'[[:space:]]*\$/\1/p" "$CONF" | head -1)"
 [ -n "$PAGER_EXPR" ] && pass "pager expression extracted" || fail "pager expression extracted"
 
 # delta's side-by-side layout is right for a full-width terminal and wrong for

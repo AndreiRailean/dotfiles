@@ -2,23 +2,35 @@
 # Managed by dotfiles. Only this file is tracked; lazygit's own state.yml in the
 # same directory is git-ignored. Verify key names with `lazygit --config`, which
 # prints the installed version's defaults — unknown keys are ignored silently.
+#
+# Requires lazygit >= 0.64 (see install.sh's lazygit_meets_floor): the
+# git.diffRenderers schema below replaced the older git.paging block in that
+# release. A binary below the floor ignores these keys silently — no error,
+# no delta, no warning — which is exactly why install.sh guarantees the
+# version rather than trusting whatever a package manager ships.
 
 git:
-  paging:
-    # lazygit passes --color=always to git diff so delta gets colour down the pipe.
-    colorArg: always
-    # Guarded like git's core.pager: delta is installed best-effort, and lazygit
-    # runs this string through a shell (upstream's docs use a pipeline as the
-    # example value), so the || fallback works and a delta-less machine still
-    # gets readable diffs.
-    #
-    # --no-gitconfig deliberately drops ~/.config/git/config's delta block.
-    # That sets side-by-side = true, which is right for a diff filling the
-    # terminal and wrong for lazygit's half-width panel — two unreadable
-    # columns. delta's -s/--side-by-side is a plain flag and can't be switched
-    # off with =false, so dropping gitconfig is the way to override it. This
-    # inconsistency with the git config is intentional; don't "fix" it.
-    pager: 'command -v delta >/dev/null 2>&1 && delta --no-gitconfig --paging=never || less'
+  diffRenderers:
+    # name is load-bearing, not decoration. Per lazygit's schema, an unset
+    # name is derived from the command's first word — and our guarded
+    # command starts with `command -v delta …`, so without this the
+    # renderer would show up as "command" instead of "delta" when cycling
+    # diff renderers. type is left at its stdinFilter default.
+    - name: delta
+      # lazygit passes --color=always to git diff so delta gets colour down the pipe.
+      colorArg: always
+      # Guarded like git's core.pager: delta is installed best-effort, and lazygit
+      # runs this string through a shell (upstream's docs use a pipeline as the
+      # example value), so the || fallback works and a delta-less machine still
+      # gets readable diffs.
+      #
+      # --no-gitconfig deliberately drops ~/.config/git/config's delta block.
+      # That sets side-by-side = true, which is right for a diff filling the
+      # terminal and wrong for lazygit's half-width panel — two unreadable
+      # columns. delta's -s/--side-by-side is a plain flag and can't be switched
+      # off with =false, so dropping gitconfig is the way to override it. This
+      # inconsistency with the git config is intentional; don't "fix" it.
+      command: 'command -v delta >/dev/null 2>&1 && delta --no-gitconfig --paging=never || less'
 
 os:
   # Match EDITOR/VISUAL from ~/.config/shell/env.sh rather than letting lazygit guess.
