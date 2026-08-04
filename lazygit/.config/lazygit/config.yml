@@ -8,6 +8,15 @@
 # release. A binary below the floor ignores these keys silently — no error,
 # no delta, no warning — which is exactly why install.sh guarantees the
 # version rather than trusting whatever a package manager ships.
+#
+# On macOS, lazygit's documented default config path is
+# ~/Library/Application Support/lazygit/config.yml — this file is read there
+# instead only because shell/.config/shell/env.sh exports XDG_CONFIG_HOME,
+# which lazygit honours ahead of its platform default. That holds for
+# interactive shells, so the package works, but any invocation with a
+# sanitized environment (no XDG_CONFIG_HOME) would silently get lazygit's
+# unconfigured defaults instead of this file. (Documented coupling, not a
+# claim verified on macOS itself.)
 
 git:
   diffRenderers:

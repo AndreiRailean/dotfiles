@@ -139,9 +139,13 @@ expression viable; the test below proves it rather than assuming it.
 - `install.sh`: add `lazygit` to the stow loop
   (`for pkg in shell git nvim tmux starship herdr claude`).
 - `doctor.sh`: add `lazygit` to `PACKAGES`.
-- `.gitignore`: `lazygit/.config/lazygit/state.yml` — lazygit writes its own
-  state there, and `--no-folding` makes `~/.config/lazygit` a real directory,
-  so without this `doctor.sh` reports the state file as drift on every run.
+- `.gitignore`: `lazygit/.config/lazygit/state.yml` — kept as insurance
+  against an older lazygit writing state next to its config. Verified live:
+  0.64, the version this repo requires, writes state under `$XDG_STATE_HOME`
+  instead (`~/.local/state/lazygit/state.yml`), not here. `--no-folding`
+  makes `~/.config/lazygit` a real directory, so if a future or older
+  lazygit ever did write state beside the config, `doctor.sh` would
+  otherwise report it as drift.
 
 ## Testing
 
