@@ -223,10 +223,15 @@ fi
 # daemon opens a `lazygit` tab in every new worktree, so without the binary a
 # fresh machine gets a tab that dies on launch.
 #
-# Package managers first — brew and pacman track current, Debian trixie has
-# 0.50 — but lazygit is missing from older Ubuntu's archive entirely, so fall
-# back to the upstream release tarball into ~/.local/bin (same shape as the
-# win32yank block above).
+# Only the upstream release is installed here — never the distro package
+# (see Amendment 1 in the plan). lazygit 0.64 replaced the git.paging config
+# block with git.diffRenderers, and an older package-manager build (Debian
+# trixie ships 0.50) ignores diffRenderers silently: no delta, no warning.
+# Falling back to that would be worse than failing loudly, so the version is
+# guaranteed by installing the release tarball, rather than left to whatever
+# a package manager happens to ship. ~/.local/bin precedes /usr/bin on PATH
+# (shell/.config/shell/path.sh:14), so the release build installed here
+# genuinely supersedes a distro lazygit already sitting on the machine.
 install_lazygit_release() {
   local ver os arch url tmp
   ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
@@ -257,9 +262,37 @@ install_lazygit_release() {
   return 1
 }
 
-if ! command -v lazygit &>/dev/null; then
+# lazygit >= 0.64.0 is a hard floor: 0.64 replaced git.paging with
+# git.diffRenderers, the schema our config uses, and anything older ignores
+# those keys silently — no error, no warning — so a lazygit merely being on
+# PATH isn't enough; it has to clear this floor, or get upgraded via
+# install_lazygit_release above. `lazygit --version` prints one line
+# containing `version=X.Y.Z`; apt's build additionally quotes it and appends
+# a Debian revision (verified: `version='0.50.0+ds1-1+b2'`), so skip any
+# non-digit characters after `version=` rather than assuming a bare value.
+# The line also ends in `git version=A.B.C` — anchor the match on the `, os=`
+# field that follows lazygit's own version, or a greedy `.*` grabs git's
+# version instead and the floor check would pass on git's major version, not
+# lazygit's. Compare major/minor numerically — no `sort -V`, it's GNU-only
+# and this script also runs on macOS.
+lazygit_meets_floor() {
+  local out ver major minor
+  command -v lazygit &>/dev/null || return 1
+  out="$(lazygit --version 2>/dev/null)" || return 1
+  ver="$(printf '%s\n' "$out" | sed -n 's/.*version=[^0-9]*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)[^,]*, *os=.*/\1/p')"
+  [ -n "$ver" ] || return 1
+  major="${ver%%.*}"
+  minor="${ver#*.}"; minor="${minor%%.*}"
+  case "$major" in ''|*[!0-9]*) return 1 ;; esac
+  case "$minor" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$major" -gt 0 ] && return 0
+  [ "$major" -eq 0 ] && [ "$minor" -ge 64 ] && return 0
+  return 1
+}
+
+if ! lazygit_meets_floor; then
   echo "Installing lazygit..."
-  pkg_install lazygit || install_lazygit_release \
+  install_lazygit_release \
     || echo "!! lazygit install failed — install manually: https://github.com/jesseduffield/lazygit/releases"
 fi
 

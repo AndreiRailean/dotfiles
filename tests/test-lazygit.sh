@@ -10,13 +10,18 @@ REPO="$(cd "$HERE/.." && pwd)"
 # ── install.sh: the install block ────────────────────────────
 INST="$REPO/install.sh"
 
-grep -q 'command -v lazygit' "$INST" \
-  && pass "install.sh guards on lazygit already being present" \
-  || fail "install.sh guards on lazygit already being present"
+grep -q 'lazygit_meets_floor' "$INST" \
+  && pass "install.sh gates on lazygit meeting the version floor" \
+  || fail "install.sh gates on lazygit meeting the version floor"
 
-grep -q 'pkg_install lazygit' "$INST" \
-  && pass "install.sh tries the system package" \
-  || fail "install.sh tries the system package"
+# lazygit 0.64 replaced git.paging with git.diffRenderers, and Debian trixie's
+# apt package (0.50) ignores diffRenderers silently — no delta, no warning —
+# so a distro package can no longer be relied on to clear the floor.
+if grep -q 'pkg_install lazygit' "$INST"; then
+  fail "install.sh no longer falls back through the system package manager"
+else
+  pass "install.sh no longer falls back through the system package manager"
+fi
 
 grep -q 'install_lazygit_release' "$INST" \
   && pass "install.sh has a release fallback" \
@@ -43,7 +48,7 @@ grep -q '!! lazygit install failed' "$INST" \
 # The daemon enabled at the end of install.sh runs lazygit in every new
 # worktree's second tab; installing it afterwards leaves a fresh machine with a
 # tab that dies on launch.
-lg_line="$(grep -n 'command -v lazygit' "$INST" | head -1 | cut -d: -f1)"
+lg_line="$(grep -n 'install_lazygit_release() {' "$INST" | head -1 | cut -d: -f1)"
 al_line="$(grep -n 'herdr-autolayout.service' "$INST" | head -1 | cut -d: -f1)"
 if [ -n "$lg_line" ] && [ -n "$al_line" ] && [ "$lg_line" -lt "$al_line" ]; then
   pass "lazygit is installed before the auto-layout daemon is enabled"
@@ -128,6 +133,70 @@ else
 fi
 
 rm -rf "$(dirname "$FN")" "$STUBDIR" "$GOODHOME" "$BLOCKER"
+
+# ── lazygit_meets_floor: the version gate ────────────────────
+# 0.64 replaced git.paging with git.diffRenderers; below the floor a binary
+# ignores the new keys silently instead of erroring, so mere presence on
+# PATH isn't enough. Extract the helper and drive it with a stubbed
+# `lazygit` on a minimal PATH — never the real system PATH, since this very
+# machine's own apt package (0.50) would otherwise leak through and skew
+# every case.
+FN2="$(mktemp -d)/floor.sh"
+sed -n '/^lazygit_meets_floor() {/,/^}/p' "$INST" > "$FN2"
+SEDBIN="$(command -v sed)"
+
+# $1: the line a stubbed `lazygit --version` should print, or empty for no
+# lazygit binary on PATH at all. The line is written to a data file and read
+# back with the `read` builtin (not `cat`) — the stub's own PATH is narrowed
+# to just $d, and `read` needs no external command to reproduce apt's build,
+# whose version is wrapped in single quotes, verbatim.
+run_floor() {
+  d="$(mktemp -d)"
+  ln -s "$SEDBIN" "$d/sed"
+  if [ -n "$1" ]; then
+    printf '%s\n' "$1" > "$d/out.txt"
+    cat > "$d/lazygit" <<STUB
+#!/bin/sh
+IFS= read -r line < "$d/out.txt"
+echo "\$line"
+STUB
+    chmod +x "$d/lazygit"
+  fi
+  export FN2 d
+  rc="$(bash -c 'PATH="$d"; . "$FN2"; lazygit_meets_floor; echo $?' 2>/dev/null)"
+  rm -rf "$d"
+  printf '%s' "$rc"
+}
+
+# Real line shapes, both verified live: apt's build (Debian trixie) quotes
+# the version and appends its own package revision; the upstream release
+# binary prints it bare. Both end in `git version=A.B.C`, which is why the
+# helper anchors its extraction rather than grabbing the last `version=`.
+VER_APT_050="commit=, build date=, build source='debian', version='0.50.0+ds1-1+b2', os=linux, arch=amd64, git version=2.47.3"
+VER_REL_064="commit=aee0e40, build date=2026-08-04T07:26:19Z, build source=binaryRelease, version=0.64.0, os=linux, arch=amd64, git version=2.47.3"
+VER_REL_100="commit=aee0e40, build date=2026-08-04T07:26:19Z, build source=binaryRelease, version=1.0.0, os=linux, arch=amd64, git version=2.47.3"
+
+rc="$(run_floor "$VER_APT_050")"
+[ "$rc" = "1" ] && pass "floor: apt's 0.50.0 does not meet the floor" \
+  || fail "floor: apt's 0.50.0 does not meet the floor (got '${rc:-?}')"
+
+rc="$(run_floor "$VER_REL_064")"
+[ "$rc" = "0" ] && pass "floor: 0.64.0 meets the floor" \
+  || fail "floor: 0.64.0 meets the floor (got '${rc:-?}')"
+
+rc="$(run_floor "$VER_REL_100")"
+[ "$rc" = "0" ] && pass "floor: 1.0.0 meets the floor (major beats minor)" \
+  || fail "floor: 1.0.0 meets the floor (major beats minor) (got '${rc:-?}')"
+
+rc="$(run_floor "")"
+[ "$rc" = "1" ] && pass "floor: no lazygit on PATH does not meet the floor" \
+  || fail "floor: no lazygit on PATH does not meet the floor (got '${rc:-?}')"
+
+rc="$(run_floor "not a version line at all")"
+[ "$rc" = "1" ] && pass "floor: unparseable --version output does not meet the floor" \
+  || fail "floor: unparseable --version output does not meet the floor (got '${rc:-?}')"
+
+rm -rf "$(dirname "$FN2")"
 
 # ── The lazygit Stow package ─────────────────────────────────
 CONF="$REPO/lazygit/.config/lazygit/config.yml"
