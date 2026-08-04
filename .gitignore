@@ -17,3 +17,8 @@ herdr/.config/herdr/.plugins.lock
 # Python bytecode from running the herdr auto-layout daemon or py_compile.
 __pycache__/
 *.pyc
+
+# lazygit writes its own state (last-used branch, panel sizes) next to its
+# config. Only config.yml is tracked; ignore the state so it's never committed
+# and doctor.sh doesn't flag it as drift.
+lazygit/.config/lazygit/state.yml

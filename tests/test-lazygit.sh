@@ -129,4 +129,67 @@ fi
 
 rm -rf "$(dirname "$FN")" "$STUBDIR" "$GOODHOME" "$BLOCKER"
 
+# ── The lazygit Stow package ─────────────────────────────────
+CONF="$REPO/lazygit/.config/lazygit/config.yml"
+
+[ -f "$CONF" ] && pass "config.yml exists" || fail "config.yml exists"
+
+# Valid YAML (skip where PyYAML isn't available)
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' 2>/dev/null; then
+  if python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' "$CONF" 2>/dev/null; then
+    pass "config.yml is valid YAML"
+  else
+    fail "config.yml is valid YAML"
+  fi
+else
+  echo "  skip: python3 PyYAML unavailable (YAML validation)"
+fi
+
+# Pinned settings
+grep -q 'colorArg: always'      "$CONF" && pass "colorArg always"       || fail "colorArg always"
+grep -q 'editPreset: nvim'      "$CONF" && pass "editPreset nvim"       || fail "editPreset nvim"
+grep -q 'nerdFontsVersion: "3"' "$CONF" && pass "nerdFontsVersion 3"    || fail "nerdFontsVersion 3"
+
+# ── The pager expression ─────────────────────────────────────
+# Single-quoted YAML scalar, so plain sed extraction works and the behavioural
+# check below needs no YAML parser.
+PAGER_EXPR="$(sed -n "s/^[[:space:]]*pager:[[:space:]]*'\(.*\)'[[:space:]]*\$/\1/p" "$CONF" | head -1)"
+[ -n "$PAGER_EXPR" ] && pass "pager expression extracted" || fail "pager expression extracted"
+
+# delta's side-by-side layout is right for a full-width terminal and wrong for
+# lazygit's half-width diff panel, which is why the repo's delta.side-by-side
+# is dropped with --no-gitconfig. Lock the divergence in so a future
+# copy-paste from git/config can't quietly undo it.
+assert_contains "$PAGER_EXPR" "--no-gitconfig" "pager ignores the repo's delta gitconfig"
+assert_not_contains "$PAGER_EXPR" "side-by-side" "pager doesn't force side-by-side"
+
+# Behavioural: run the real expression with stubbed binaries, exactly as
+# tests/test-git-delta.sh does for core.pager.
+BIN="$(mktemp -d)"
+trap 'rm -rf "$BIN"' EXIT INT TERM
+printf '#!/bin/sh\necho USED_DELTA\n' >"$BIN/delta"
+printf '#!/bin/sh\necho USED_LESS\n'  >"$BIN/less"
+chmod +x "$BIN/delta" "$BIN/less"
+
+# PATH is narrowed inside the child, not as an assignment prefix — the latter
+# would hide the `sh` binary we're trying to launch.
+run_expr() { echo x | sh -c "PATH='$BIN'; $1" 2>/dev/null; }
+
+assert_eq "$(run_expr "$PAGER_EXPR")" "USED_DELTA" "pager uses delta when installed"
+rm -f "$BIN/delta"
+assert_eq "$(run_expr "$PAGER_EXPR")" "USED_LESS"  "pager falls back to less without delta"
+
+# ── Tool-written state stays out of the repo ─────────────────
+# --no-folding makes ~/.config/lazygit a real dir, so lazygit's state.yml is a
+# real file outside the repo; doctor.sh skips anything git check-ignore matches.
+git -C "$REPO" check-ignore -q "lazygit/.config/lazygit/state.yml" \
+  && pass "git-ignored: state.yml" || fail "git-ignored: state.yml"
+
+# ── Package machinery ────────────────────────────────────────
+grep -Eq 'for pkg in .*\blazygit\b' "$INST" \
+  && pass "install.sh stows lazygit" || fail "install.sh stows lazygit"
+grep -Eq 'PACKAGES=.*\blazygit\b' "$REPO/doctor.sh" \
+  && pass "doctor.sh scans lazygit" || fail "doctor.sh scans lazygit"
+bash -n "$REPO/doctor.sh" && pass "doctor.sh parses" || fail "doctor.sh parses"
+
 finish

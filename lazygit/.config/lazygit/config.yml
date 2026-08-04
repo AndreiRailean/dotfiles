@@ -1,0 +1,29 @@
+# lazygit — https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
+# Managed by dotfiles. Only this file is tracked; lazygit's own state.yml in the
+# same directory is git-ignored. Verify key names with `lazygit --config`, which
+# prints the installed version's defaults — unknown keys are ignored silently.
+
+git:
+  paging:
+    # lazygit passes --color=always to git diff so delta gets colour down the pipe.
+    colorArg: always
+    # Guarded like git's core.pager: delta is installed best-effort, and lazygit
+    # runs this string through a shell (upstream's docs use a pipeline as the
+    # example value), so the || fallback works and a delta-less machine still
+    # gets readable diffs.
+    #
+    # --no-gitconfig deliberately drops ~/.config/git/config's delta block.
+    # That sets side-by-side = true, which is right for a diff filling the
+    # terminal and wrong for lazygit's half-width panel — two unreadable
+    # columns. delta's -s/--side-by-side is a plain flag and can't be switched
+    # off with =false, so dropping gitconfig is the way to override it. This
+    # inconsistency with the git config is intentional; don't "fix" it.
+    pager: 'command -v delta >/dev/null 2>&1 && delta --no-gitconfig --paging=never || less'
+
+os:
+  # Match EDITOR/VISUAL from ~/.config/shell/env.sh rather than letting lazygit guess.
+  editPreset: nvim
+
+gui:
+  # install.sh places the Monaspace Nerd Font, so the glyph set is available.
+  nerdFontsVersion: "3"

@@ -21,7 +21,7 @@ set -euo pipefail
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$DOTFILES_DIR"
 
-PACKAGES="shell git nvim tmux starship herdr claude"
+PACKAGES="shell git nvim tmux starship herdr lazygit claude"
 ADOPT=0
 [ "${1:-}" = "--adopt" ] && ADOPT=1
 
