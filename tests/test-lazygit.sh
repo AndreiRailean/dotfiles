@@ -248,9 +248,19 @@ rm -rf "$(dirname "$FN3")"
 # git.paging config (Amendment 1, verified live). Launch a REAL lazygit on
 # this machine's real PATH against a COPY of the tracked config in scratch
 # HOME/XDG dirs — never ~/.config/lazygit itself, that symlinks into this
-# repo — and assert the copy is byte-identical afterwards. Skips cleanly
-# without a real lazygit >= 0.64 or a pty (`script`); touches no network.
+# repo — and assert the copy is byte-identical afterwards. Touches no network.
+#
+# The guard checks the tooling, not just lazygit: `timeout` and `sha256sum` are
+# GNU coreutils and absent from stock macOS, and `script -q -c CMD FILE` is
+# util-linux syntax (BSD script takes the command as trailing args). Without
+# those checks this block would run on a Mac, fail silently behind the
+# `|| true`, leave both sums empty, and `assert_eq "" ""` would report a pass
+# it never earned — a test asserting nothing is worse than one that skips. The
+# non-empty check below is the second line of defence, so an empty-vs-empty
+# comparison can never be mistaken for success.
 if command -v script >/dev/null 2>&1 \
+   && command -v timeout >/dev/null 2>&1 \
+   && command -v sha256sum >/dev/null 2>&1 \
    && bash -c ". \"$FN2\"; lazygit_meets_floor" 2>/dev/null; then
   LAUNCH="$(mktemp -d)"
   mkdir -p "$LAUNCH/home" "$LAUNCH/xdgconf/lazygit" "$LAUNCH/xdgstate"
@@ -260,10 +270,13 @@ if command -v script >/dev/null 2>&1 \
       "env HOME=$LAUNCH/home XDG_CONFIG_HOME=$LAUNCH/xdgconf XDG_STATE_HOME=$LAUNCH/xdgstate lazygit" \
       /dev/null ) >/dev/null 2>&1 || true
   SUM_AFTER="$(sha256sum "$LAUNCH/xdgconf/lazygit/config.yml" | awk '{print $1}')"
+  [ -n "$SUM_BEFORE" ] && [ -n "$SUM_AFTER" ] \
+    && pass "config checksums captured around the launch" \
+    || fail "config checksums captured around the launch (empty — the comparison below would be vacuous)"
   assert_eq "$SUM_AFTER" "$SUM_BEFORE" "a real lazygit launch doesn't rewrite the tracked config"
   rm -rf "$LAUNCH"
 else
-  echo "  skip: no lazygit >= 0.64 and/or no pty ('script') available for the real-launch config check"
+  echo "  skip: real-launch config check needs lazygit >= 0.64, a pty ('script'), timeout and sha256sum"
 fi
 
 rm -rf "$(dirname "$FN2")"
