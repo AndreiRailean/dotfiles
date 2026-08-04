@@ -47,8 +47,10 @@ grep -q '!! lazygit install failed' "$INST" \
 # ── Ordering: lazygit before the auto-layout daemon ──────────
 # The daemon enabled at the end of install.sh runs lazygit in every new
 # worktree's second tab; installing it afterwards leaves a fresh machine with a
-# tab that dies on launch.
-lg_line="$(grep -n 'install_lazygit_release() {' "$INST" | head -1 | cut -d: -f1)"
+# tab that dies on launch. Anchor on the gate itself (not the helper
+# definitions above it) — that's the line whose position actually determines
+# when the install happens.
+lg_line="$(grep -n 'if ! lazygit_meets_floor' "$INST" | head -1 | cut -d: -f1)"
 al_line="$(grep -n 'herdr-autolayout.service' "$INST" | head -1 | cut -d: -f1)"
 if [ -n "$lg_line" ] && [ -n "$al_line" ] && [ "$lg_line" -lt "$al_line" ]; then
   pass "lazygit is installed before the auto-layout daemon is enabled"
