@@ -165,13 +165,22 @@ fi
 # ── 1Password CLI (op) ───────────────────────────────────────
 # Not in distro repos; use 1Password's own channels. See
 # https://developer.1password.com/docs/cli/get-started/
+#
+# --batch --yes on both dearmor calls is load-bearing, not tidiness. gpg PROMPTS
+# ("File '…' exists. Overwrite?") when --output names an existing file, and this
+# script is meant to be re-run: any machine where an earlier run wrote the
+# keyring but didn't finish installing op would stall here forever on every
+# later run. The stall lands before `apt install` in the same && chain, so op
+# never arrives, `command -v op` never starts passing, and the machine stays
+# stuck. --yes answers the overwrite question; --batch stops gpg asking anything
+# at all.
 if ! command -v op &>/dev/null; then
   echo "Installing 1Password CLI (op)..."
   if command -v brew &>/dev/null; then
     brew install 1password-cli || echo "!! op install via brew failed"
   elif command -v apt &>/dev/null; then
     if curl -sS https://downloads.1password.com/linux/keys/1password.asc \
-         | sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg \
+         | sudo gpg --batch --yes --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg \
        && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
          | sudo tee /etc/apt/sources.list.d/1password.list >/dev/null \
        && sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22/ \
@@ -179,7 +188,7 @@ if ! command -v op &>/dev/null; then
          | sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol >/dev/null \
        && sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 \
        && curl -sS https://downloads.1password.com/linux/keys/1password.asc \
-         | sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg \
+         | sudo gpg --batch --yes --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg \
        && sudo apt update && sudo apt install -y 1password-cli; then
       :
     else
