@@ -242,6 +242,30 @@ assert_not_contains "$out" "below the 0.64 floor" "doctor.sh stays quiet when la
 
 rm -rf "$(dirname "$FN3")"
 
+# ── Recommendation: pin the schema coupling with a real launch ──
+# The whole floor exists because a future lazygit could migrate the schema
+# again and rewrite the tracked config in place, exactly as 0.64 does to a
+# git.paging config (Amendment 1, verified live). Launch a REAL lazygit on
+# this machine's real PATH against a COPY of the tracked config in scratch
+# HOME/XDG dirs — never ~/.config/lazygit itself, that symlinks into this
+# repo — and assert the copy is byte-identical afterwards. Skips cleanly
+# without a real lazygit >= 0.64 or a pty (`script`); touches no network.
+if command -v script >/dev/null 2>&1 \
+   && bash -c ". \"$FN2\"; lazygit_meets_floor" 2>/dev/null; then
+  LAUNCH="$(mktemp -d)"
+  mkdir -p "$LAUNCH/home" "$LAUNCH/xdgconf/lazygit" "$LAUNCH/xdgstate"
+  cp "$REPO/lazygit/.config/lazygit/config.yml" "$LAUNCH/xdgconf/lazygit/config.yml"
+  SUM_BEFORE="$(sha256sum "$LAUNCH/xdgconf/lazygit/config.yml" | awk '{print $1}')"
+  ( cd "$REPO" && timeout 8 script -q -c \
+      "env HOME=$LAUNCH/home XDG_CONFIG_HOME=$LAUNCH/xdgconf XDG_STATE_HOME=$LAUNCH/xdgstate lazygit" \
+      /dev/null ) >/dev/null 2>&1 || true
+  SUM_AFTER="$(sha256sum "$LAUNCH/xdgconf/lazygit/config.yml" | awk '{print $1}')"
+  assert_eq "$SUM_AFTER" "$SUM_BEFORE" "a real lazygit launch doesn't rewrite the tracked config"
+  rm -rf "$LAUNCH"
+else
+  echo "  skip: no lazygit >= 0.64 and/or no pty ('script') available for the real-launch config check"
+fi
+
 rm -rf "$(dirname "$FN2")"
 
 # ── The lazygit Stow package ─────────────────────────────────
