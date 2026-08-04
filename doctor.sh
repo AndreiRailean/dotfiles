@@ -25,12 +25,6 @@ PACKAGES="shell git nvim tmux starship herdr lazygit claude"
 ADOPT=0
 [ "${1:-}" = "--adopt" ] && ADOPT=1
 
-# ── AI-agent tmux integration health (report-only; never affects drift) ──
-if [ "$ADOPT" -eq 0 ] && [ -x "$DOTFILES_DIR/tmux/.config/tmux/scripts/agent-doctor" ]; then
-  "$DOTFILES_DIR/tmux/.config/tmux/scripts/agent-doctor" || true
-  echo
-fi
-
 # ── Editor health (report-only; never affects drift) ────────
 # The vim -> nvim aliases only apply to interactive shells. If the `vim` binary
 # itself still resolves to classic vim, scripts and sudo get the wrong editor.

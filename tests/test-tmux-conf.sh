@@ -22,8 +22,19 @@ assert_contains "$keys" "M-h" "M-h pane-nav bound"
 assert_contains "$keys" "M-L" "M-L next-window bound"
 assert_contains "$keys" "synchronize-panes" "sync-panes toggle bound"
 
-assert_contains "$(tmux -L "$L" show -gwv window-status-format 2>/dev/null)" "@agent_state" "window list renders @agent_state chip"
+assert_contains "$(tmux -L "$L" show -gwv window-status-format 2>/dev/null)" "#I:#W" "window list shows index and name"
 assert_contains "$(tmux -L "$L" show -gv status-left 2>/dev/null)" "#S" "status-left shows session name"
-assert_contains "$(tmux -L "$L" show -gv status-right 2>/dev/null)" "agent-summary" "status-right calls agent-summary"
-assert_contains "$(tmux -L "$L" show-hooks -gw 2>/dev/null)" "pane-focus-in" "pane-focus-in clear hook is set"
+assert_contains "$(tmux -L "$L" show -gv status-right 2>/dev/null)" "%H:%M" "status-right shows the clock"
+assert_contains "$(tmux -L "$L" show -gv status-right 2>/dev/null)" "SSH_CONNECTION" "status-right shows the host only over SSH"
+
+# The Claude -> tmux agent integration was removed in favour of herdr. These
+# guard against it creeping back in via a stale copy-paste: the scripts it
+# called are gone, so a format string referencing them would render an error
+# into the status bar on every refresh.
+assert_not_contains "$(tmux -L "$L" show -gv status-right 2>/dev/null)" "agent-summary" "status-right doesn't call the removed agent-summary"
+assert_not_contains "$(tmux -L "$L" show -gwv window-status-format 2>/dev/null)" "@agent_state" "window list doesn't reference the removed @agent_state"
+# Match on the script name, not the hook name: `show-hooks -gw` lists every hook
+# tmux knows about whether or not a command is bound to it, so asserting on
+# "pane-focus-in" would pass either way — as the assertion this replaces did.
+assert_not_contains "$(tmux -L "$L" show-hooks -gw 2>/dev/null)" "agent-clear" "no hook calls the removed agent-clear"
 finish

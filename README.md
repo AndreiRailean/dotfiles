@@ -255,41 +255,25 @@ so the workflow there is to notice the new tool and add it as a package
   *relative* include against the symlink's target (inside the repo) — not where
   the per-machine file actually lives.
 
-## tmux + AI agents
+## tmux
 
-The tmux config is tuned for running several Claude Code sessions in parallel
-and seeing, at a glance, which one needs you.
-
-**Attention chips.** Each window shows a colored chip when its agent changes
-state, driven by Claude Code hooks:
-
-| Chip        | Meaning                          |
-|-------------|----------------------------------|
-| `● working` | you submitted a prompt (yellow)  |
-| `▲ input`   | Claude is waiting on you (red)   |
-| `✔ done`    | Claude finished a turn (green)   |
-
-`▲ input` / `✔ done` also ring the terminal bell and emit an OSC 9 desktop
-notification (your terminal shows a native toast). Chips clear when you focus
-the window. The right side of the status bar aggregates across windows, e.g.
-`▲2 ●1`.
-
-**How it's wired.** Three Claude hooks (`UserPromptSubmit`, `Notification`,
-`Stop`) call `$HOME/.config/tmux/scripts/agent-notify`, which sets a per-window
-`@agent_state` tmux option. They're declared in the tracked
-`claude/.claude/settings.json`, stowed to `~/.claude/settings.json` — no merge
-step, so editing that file in the repo is all it takes.
+tmux is kept for plain and SSH-only boxes. [herdr](#herdr) is the driver for
+agent work.
 
 **Keys** (prefix is `C-a`): `M-h/j/k/l` move between panes, `M-H`/`M-L`
 previous/next window, `prefix S` toggles `synchronize-panes` (type into every
 pane at once), `prefix Enter` opens a scratch popup, `prefix g` opens the
 session tree.
 
-**Limitation.** `@agent_state` is per-window, so two agents in one window share
-one chip — run roughly one agent per window/session for clean signals.
+The config also sets `allow-passthrough` (so OSC sequences reach the outer
+terminal), `extended-keys` (Shift+Enter in TUIs that want it), and
+`focus-events` (what makes nvim's `autoread` and `FocusGained` fire).
 
-**Health check.** `./doctor.sh` prints an "AI-agent tmux integration" section;
-`~/.config/tmux/scripts/agent-doctor` runs it standalone.
+**No agent integration here.** An earlier version showed per-window Claude Code
+attention chips, driven by three Claude hooks calling `scripts/agent-notify`.
+That was removed in favour of herdr, which reports agent state natively. See
+`docs/superpowers/specs/2026-07-24-tmux-ai-agents-design.md` for what it did and
+why, if you ever want it back.
 
 _Phase 2 (planned): an fzf `sessionizer` popup (`prefix f`) and a git-`worktree`
 launcher (`prefix W`)._

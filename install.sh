@@ -102,7 +102,7 @@ ensure_tool bat bat batcat     # cat with syntax highlighting
 ensure_tool eza eza            # nicer ls
 ensure_tool ripgrep rg         # fast recursive grep
 ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
-ensure_tool jq jq              # JSON processor (Claude status line, agent-doctor)
+ensure_tool jq jq              # JSON processor (Claude status line)
 ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
 # delta (syntax-highlighted git diffs) — the package is git-delta on apt, brew
 # AND pacman. Not `delta`: on Debian/Ubuntu that name belongs to an unrelated
