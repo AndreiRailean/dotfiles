@@ -336,7 +336,7 @@ The contract is one line of stdout plus an exit status, so the script is
 exercisable without starship and starship's custom module can gate on it."
 ```
 
-Verify the mode was recorded: `git show --stat HEAD | grep devserver` should show mode `100755`. If it shows `100644`, run `git update-index --chmod=+x starship/.config/starship/devserver-port.sh` and amend.
+Verify the mode was recorded: `git ls-tree HEAD starship/.config/starship/devserver-port.sh` should show mode `100755`. If it shows `100644`, run `git update-index --chmod=+x starship/.config/starship/devserver-port.sh` and amend.
 
 ---
 

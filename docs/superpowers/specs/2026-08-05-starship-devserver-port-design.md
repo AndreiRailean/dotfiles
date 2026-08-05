@@ -30,7 +30,12 @@ convenient.
 - **Nothing at all when idle.** No "no server" placeholder: the segment's
   presence *is* the signal.
 - **This workspace only.** Servers belonging to other worktrees are not
-  reported, not even as a count.
+  reported, not even as a count. The rule is subtree-inclusive — a listener
+  matches when its cwd is the workspace root *or nested under it* — so a
+  checkout that physically contains its own worktrees (this repo nests them
+  under `.claude/worktrees/…`) does report a nested worktree's port when you
+  stand in the parent. A sibling worktree, elsewhere on disk, is never
+  claimed; that is the case this decision exists for.
 - **Any listening process counts**, not just `node`/`next` — the rule is "its
   cwd is inside this workspace", so `vite`, `supabase functions serve` or a
   throwaway `python -m http.server` are all picked up with no name allowlist to
