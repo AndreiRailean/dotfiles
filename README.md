@@ -221,6 +221,22 @@ It runs automatically (report-only) at the end of `install.sh`, and uses
 `.gitignore` as the source of truth — anything intentionally per-machine
 (`local.sh`, `git/local`) is never flagged.
 
+### Deleting a tracked file
+
+`git rm`-ing a file from a package leaves every *other* machine with a symlink
+pointing at something that no longer exists, and `stow --restow` won't clean
+that up: stow only unlinks what the package currently contains, so a link whose
+repo file is gone is invisible to it. Left alone it would survive every future
+install and `doctor.sh` would report it as drift forever — one machine's
+deletion becoming a manual chore on all the others.
+
+So `install.sh` prunes them, and removes any directory left empty as a result.
+The scope is narrow, because this deletes things in `$HOME`: a symlink must be
+dangling **and** inside a directory one of our packages owns **and** point back
+into this repo. A broken link you made yourself, or one aimed anywhere else, is
+left alone. Deleting a tracked file is therefore just: commit the removal, then
+run `./install.sh` on each machine as usual.
+
 ### Drift in the other direction
 
 Some tracked files are rewritten by the tool that owns them rather than by you

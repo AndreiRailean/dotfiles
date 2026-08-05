@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# `pwd -P`, not `pwd`: stow resolves the package directory physically, so the
+# links it writes point at the repo's REAL path (verified: with the repo reached
+# through a symlink, stow wrote ../../real/pkg/… not ../symlink/pkg/…). Anything
+# comparing a link's target against this variable — prune_dead_links below —
+# needs the same form, or the comparison silently never matches. doctor.sh
+# derives it the same way; keep them identical.
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$DOTFILES_DIR"
 
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -64,6 +70,83 @@ clear_stow_conflicts() {
   done < <(cd "$pkg" && find . -type f | sed 's|^\./||')
 }
 
+# ── Remove links to files the repo no longer has ─────────────
+# Deleting a tracked file leaves every OTHER machine with a symlink pointing at
+# it, and `stow --restow` will not clean that up: stow unlinks only what the
+# package currently contains, so a link whose repo file is gone is invisible to
+# it. Left alone it survives every future install and doctor.sh reports it as
+# drift forever — one machine's `git rm` becoming a manual chore on all the
+# others, which is the opposite of the point of keeping config in a repo.
+# (Real case: 8fcfba8 dropped the tmux agent-* scripts.)
+#
+# This deletes things in $HOME, so the scope is deliberately narrow: a symlink
+# must be dangling AND inside a directory one of our packages owns AND point
+# back into this repo. A broken link the user made, or one aimed anywhere else,
+# is not ours to remove.
+
+# Absolute, lexically-resolved target of a symlink. The filesystem is no help
+# here — a link to a deleted file usually has deleted ancestor dirs too, which
+# rules out `readlink -f`, realpath and `cd`. Collapsing `..` textually is
+# sound for stow's links, which never traverse a symlinked directory.
+link_target_abs() {
+  local tgt seg out=()
+  tgt="$(readlink "$1")" || return 1
+  case "$tgt" in /*) : ;; *) tgt="$(dirname "$1")/$tgt" ;; esac
+  local IFS=/
+  for seg in $tgt; do
+    case "$seg" in
+      ''|.) : ;;
+      ..)   [ "${#out[@]}" -gt 0 ] && out=("${out[@]:0:${#out[@]}-1}") || : ;;
+      *)    out+=("$seg") ;;
+    esac
+  done
+  printf '/%s\n' "${out[*]}"      # IFS=/ joins the segments back together
+}
+
+# The top directory a package introduces under $HOME (.config/<name>, or a
+# top-level entry). Must cover subdirectories, because that's where deleted
+# files leave their links behind. Byte-identical copy in doctor.sh; see
+# docs/adr/0001-no-shared-shell-library.md for why the two scripts share no
+# library, and tests/test-shared-logic-sync.sh which enforces the copies.
+owned_roots() {
+  find "$1" -type f | while IFS= read -r f; do
+    rel="${f#"$1"/}"
+    case "$rel" in
+      .config/*/*) printf '.config/%s\n' "$(printf '%s' "$rel" | cut -d/ -f2)" ;;
+      *)           printf '%s\n' "$rel" ;;
+    esac
+  done | sort -u
+}
+
+prune_dead_links() {
+  local pkg="$1" root troot entry tgt d
+  local pruned=()
+  while IFS= read -r root; do
+    troot="$HOME/$root"
+    [ -d "$troot" ] && [ ! -L "$troot" ] || continue
+    while IFS= read -r entry; do
+      [ -L "$entry" ] && [ ! -e "$entry" ] || continue   # dangling only
+      tgt="$(link_target_abs "$entry")" || continue
+      case "$tgt" in
+        "$DOTFILES_DIR"/*)
+          rm -f "$entry"
+          pruned+=("$(dirname "$entry")")
+          echo "Removed dead link ~/${entry#"$HOME"/} — ${tgt#"$DOTFILES_DIR"/} is no longer in the repo"
+          ;;
+      esac
+    done < <(find "$troot" -type l)
+    # A directory that existed only to hold those links is now clutter. rmdir
+    # refuses non-empty dirs, so this can't take anything else with it, and
+    # $troot is skipped: stow needs the owned root on the next run.
+    if [ "${#pruned[@]}" -gt 0 ]; then
+      for d in "${pruned[@]}"; do
+        [ "$d" = "$troot" ] || rmdir "$d" 2>/dev/null || true
+      done
+      pruned=()
+    fi
+  done < <(owned_roots "$pkg")
+}
+
 # ── Symlink packages into $HOME ──────────────────────────────
 # --no-folding: create real directories with per-file symlinks rather than
 # symlinking whole dirs into the repo. This keeps ~/.config/shell (etc.) a
@@ -75,6 +158,7 @@ for pkg in shell git nvim tmux starship herdr lazygit claude; do
   echo "Stowing $pkg..."
   clear_stow_conflicts "$pkg"
   stow -v --no-folding --target="$HOME" --restow "$pkg"
+  prune_dead_links "$pkg"
 done
 
 # ── Wire the shell entrypoint into each shell's rc ───────────

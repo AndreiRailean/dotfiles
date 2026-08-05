@@ -177,6 +177,7 @@ if [ "${#broken[@]}" -gt 0 ]; then
   found=1
   echo "✗ Broken symlinks (repo file was moved or deleted):"
   for e in "${broken[@]}"; do echo "    $e"; done
+  echo "    fix: re-run ./install.sh — it prunes links into this repo"
   echo
 fi
 if [ "${#missing[@]}" -gt 0 ]; then
