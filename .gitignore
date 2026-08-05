@@ -17,6 +17,9 @@ herdr/.config/herdr/*.log
 herdr/.config/herdr/*.sock
 herdr/.config/herdr/session.json
 herdr/.config/herdr/.plugins.lock
+# Changelog for the herdr build that happens to be installed on this machine —
+# herdr's own data, not our config, and it differs per host by version.
+herdr/.config/herdr/release-notes.json
 
 # Python bytecode from running the herdr auto-layout daemon or py_compile.
 __pycache__/

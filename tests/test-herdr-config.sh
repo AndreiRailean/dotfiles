@@ -26,7 +26,7 @@ grep -q 'name = "tokyo-night"' "$CONF" && pass "theme tokyo-night" || fail "them
 grep -q 'prefix = "ctrl+a"' "$CONF" && pass "prefix ctrl+a" || fail "prefix ctrl+a"
 
 # Runtime state is git-ignored (doctor.sh relies on this to skip it)
-for f in herdr.log herdr.sock session.json .plugins.lock; do
+for f in herdr.log herdr.sock session.json .plugins.lock release-notes.json; do
   if git -C "$REPO" check-ignore -q "herdr/.config/herdr/$f"; then
     pass "git-ignored: $f"
   else
