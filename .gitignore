@@ -6,6 +6,10 @@ git/.config/git/local
 # Subagent-driven-development scratch (ledger, briefs, review packages).
 .superpowers/
 
+# Isolated worktrees for executing plans. Real checkouts live here, so leaving
+# them tracked would commit an entire second copy of the repo into itself.
+.worktrees/
+
 # herdr keeps runtime state alongside its config in ~/.config/herdr/. Only
 # config.toml is tracked; ignore the sockets, logs, and session state so they
 # are never committed and doctor.sh doesn't flag them as drift.
