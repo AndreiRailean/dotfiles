@@ -27,20 +27,42 @@ if ! command -v stow &>/dev/null; then
   pkg_install stow || { echo "Install GNU Stow manually."; exit 1; }
 fi
 
-# ── Hand ~/.claude files over to the repo (once per machine) ─
-# ~/.claude/settings.json is the live file Claude Code reads AND writes, so
-# it can't be stowed while a real file already sits there. Claude writes
-# *through* a symlink (verified: the link survives plugin/marketplace/config
-# writes), so we track the real file and let its edits land in the repo
-# instead of merging a patch into a machine-owned copy. Move any pre-existing
-# file aside once; the backup keeps machine-local keys for manual re-add.
-for f in settings.json statusline-command.sh; do
-  t="$HOME/.claude/$f"
-  if [ -e "$t" ] && [ ! -L "$t" ]; then
-    mv "$t" "$t.pre-dotfiles.$(date +%s)"
-    echo "Moved aside existing ~/.claude/$f — see $(basename "$t").pre-dotfiles.* backup"
-  fi
-done
+# ── Hand pre-existing config files over to the repo ──────────
+# stow refuses to link over a target that is a real file rather than a symlink
+# or a directory, and under `set -e` that refusal doesn't just skip the one
+# package — it aborts this whole script at the loop below, silently skipping
+# every later step (the remaining packages, the lazygit binary, the font, the
+# auto-layout unit). The trigger is ordinary: tools write a config on first
+# run, so any machine that used a tool BEFORE this repo managed it has exactly
+# such a file sitting on the target. lazygit is the case that surfaced this —
+# it leaves an empty ~/.config/lazygit/config.yml on first launch — but
+# nothing here is lazygit-specific.
+#
+# So move the machine's file aside and let the repo's copy win. Deliberately
+# NOT `stow --adopt`, which resolves the conflict the other way round: adopt
+# pulls the machine's file into the repo, so a fresh machine's empty config
+# would overwrite the tracked one and surface as a real change to commit.
+#
+# The file is kept rather than deleted because of ~/.claude/settings.json:
+# that's the live file Claude Code reads AND writes, so a machine's copy can
+# hold machine-local keys worth re-adding by hand. (Claude writes *through* a
+# symlink — verified: the link survives plugin/marketplace/config writes — so
+# tracking the real file lets its edits land in the repo instead of needing a
+# patch merged into a machine-owned copy.)
+#
+# Only real files are moved. An existing symlink is already ours, so re-runs
+# are a no-op that sheds no extra backups. `find` stays on plain `-type f`:
+# `-printf` is GNU-only and this script also runs on macOS.
+clear_stow_conflicts() {
+  local pkg="$1" rel t
+  while IFS= read -r rel; do
+    t="$HOME/$rel"
+    if [ -e "$t" ] && [ ! -L "$t" ] && [ ! -d "$t" ]; then
+      mv "$t" "$t.pre-dotfiles.$(date +%s)"
+      echo "Moved aside existing ~/$rel — see $(basename "$t").pre-dotfiles.* backup"
+    fi
+  done < <(cd "$pkg" && find . -type f | sed 's|^\./||')
+}
 
 # ── Symlink packages into $HOME ──────────────────────────────
 # --no-folding: create real directories with per-file symlinks rather than
@@ -51,6 +73,7 @@ done
 for pkg in shell git nvim tmux starship herdr lazygit claude; do
   [ -d "$pkg" ] || continue
   echo "Stowing $pkg..."
+  clear_stow_conflicts "$pkg"
   stow -v --no-folding --target="$HOME" --restow "$pkg"
 done
 

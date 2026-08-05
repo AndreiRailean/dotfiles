@@ -71,6 +71,14 @@ On a machine that already has its own `~/.claude/settings.json`, `install.sh`
 moves it aside to `settings.json.pre-dotfiles.<epoch>` before stowing, so
 nothing is silently overwritten.
 
+This applies to every package, not just this one. `stow` refuses to link over a
+target that is a real file, and under `set -e` that refusal aborts the whole
+install — so a config a tool wrote before this repo managed it (lazygit creates
+an empty `~/.config/lazygit/config.yml` on first launch) would otherwise stop
+the run before it installed anything further. `install.sh` displaces any such
+file to `<name>.pre-dotfiles.<epoch>`; `doctor.sh` ignores those backups, so
+delete them once you've salvaged anything machine-local.
+
 ## Shell configuration
 
 The shell config is a set of POSIX-`sh` **fragments** that both bash and zsh

@@ -107,6 +107,13 @@ for pkg in $PACKAGES; do
       if [ -L "$entry" ]; then
         [ -e "$entry" ] || broken+=("$entry")
       elif [ -f "$entry" ]; then
+        # install.sh's clear_stow_conflicts displaces a pre-existing real file
+        # to <name>.pre-dotfiles.<epoch>, right beside the symlink it then
+        # creates — so the backup sits inside a scanned managed root. It is a
+        # recovery copy, not config to track: adopting it would mv it into the
+        # repo and stow it back, permanently committing a stale file (usually
+        # the empty one a tool wrote on its first run).
+        case "${entry##*/}" in *.pre-dotfiles.*) continue ;; esac
         rel="${entry#"$HOME"/}"
         is_ignored "$pkg/$rel" || untracked+=("$entry|$pkg|$rel")
       fi
