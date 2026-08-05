@@ -150,4 +150,89 @@ assert_eq "$rc" "1" "a missing ss exits 1"
 err="$( run "$ROOT" "$TMP/no-such-proc" "$TMP/bin/no-such-ss" 2>&1 1>/dev/null )"
 assert_eq "$err" "" "nothing is written to stderr even when everything is missing"
 
+# ── starship.toml wiring ─────────────────────────────────────
+TOML="$REPO/starship/.config/starship.toml"
+
+# U+F233, the nerd-font server glyph, as its UTF-8 bytes. Compared by bytes so
+# an editor that mangles the character on the way in is caught here rather than
+# showing up as a missing glyph in the prompt.
+GLYPH="$(printf '\357\210\263')"
+
+grep -qF '${custom.devserver}' "$TOML" \
+  && pass "format references the module in braced form" \
+  || fail "format references the module in braced form"
+
+# Written $custom.devserver, starship expands $custom and emits ".devserver" as
+# literal text, so the prompt reads "  :3001.devserver".
+if grep -qE '\$custom\.devserver' "$TOML"; then
+  fail "format does not use the unbraced \$custom.devserver form"
+else
+  pass "format does not use the unbraced \$custom.devserver form"
+fi
+
+grep -qF "$GLYPH" "$TOML" \
+  && pass "the module carries the U+F233 server glyph" \
+  || fail "the module carries the U+F233 server glyph"
+
+# Distinct from the neighbouring nodejs symbol, or the two segments read as one.
+# Read both out of the file rather than hardcoding: nodejs currently carries a
+# bare space, and this stays correct if a glyph is added there later.
+sym_of() { # sym_of SECTION_HEADER -> the section's symbol value
+  sed -n "/^\\[$1\\]/,/^\\[/p" "$TOML" |
+    sed -n 's/^symbol *= *"\(.*\)"/\1/p' | head -1
+}
+dev_sym="$(sym_of 'custom\.devserver')"
+node_sym="$(sym_of 'nodejs')"
+if [ -n "$dev_sym" ] && [ "$dev_sym" != "$node_sym" ]; then
+  pass "the devserver symbol is non-empty and distinct from nodejs's"
+else
+  fail "the devserver symbol is non-empty and distinct from nodejs's (devserver='$dev_sym' nodejs='$node_sym')"
+fi
+
+grep -qF '[custom.devserver]' "$TOML" \
+  && pass "the module block exists" \
+  || fail "the module block exists"
+
+# Both keys must point at the script: the exit status gates the segment, the
+# stdout fills it. A `when` of "true" would leave a bare glyph everywhere.
+cnt="$(grep -cF 'devserver-port.sh' "$TOML")"
+assert_eq "$cnt" "2" "command and when both point at the script"
+
+grep -qE '^when *= *.*devserver-port\.sh' "$TOML" \
+  && pass "when runs the script rather than a placeholder" \
+  || fail "when runs the script rather than a placeholder"
+
+# Workspace facts grouped together: after git_status, before the language
+# modules.
+gs="$(grep -n '\$git_status' "$TOML" | head -1 | cut -d: -f1)"
+dv="$(grep -nF '${custom.devserver}' "$TOML" | head -1 | cut -d: -f1)"
+nj="$(grep -n '\$nodejs' "$TOML" | head -1 | cut -d: -f1)"
+if [ -n "$gs" ] && [ -n "$dv" ] && [ -n "$nj" ] \
+  && [ "$gs" -lt "$dv" ] && [ "$dv" -lt "$nj" ]; then
+  pass "the segment sits after git_status and before the language modules"
+else
+  fail "the segment sits after git_status and before the language modules (git_status@${gs:-?} devserver@${dv:-?} nodejs@${nj:-?})"
+fi
+
+grep -qF 'starship/.config/starship/devserver-port.sh' "$REPO/README.md" \
+  && pass "README's symlink map lists the script" \
+  || fail "README's symlink map lists the script"
+
+# ── real starship render ─────────────────────────────────────
+# Behavioural, not textual: prove the segment stays absent where no server is
+# running. Guarded on the STOWED script, because the toml points at
+# $HOME/.config/starship/devserver-port.sh — without it the command fails, the
+# segment is absent for the wrong reason and the check would pass vacuously.
+# STARSHIP_SHELL must be unset or starship wraps colours in literal \[ \].
+if command -v starship >/dev/null 2>&1 \
+  && [ -x "$HOME/.config/starship/devserver-port.sh" ]; then
+  render="$(env -u STARSHIP_SHELL STARSHIP_CONFIG="$TOML" \
+    starship prompt --path "$TMP/plain" --logical-path "$TMP/plain" \
+    --status 0 2>/dev/null)"
+  assert_not_contains "$render" "$GLYPH" \
+    "no segment renders in a directory with no dev server"
+else
+  echo "  skip: starship or the stowed script is missing — render check not run"
+fi
+
 finish

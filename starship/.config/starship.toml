@@ -11,6 +11,7 @@ format = """
 $directory\
 $git_branch\
 $git_status\
+${custom.devserver}\
 $nodejs\
 $python\
 $rust\
@@ -68,3 +69,22 @@ format = "[$symbol($version )]($style)"
 [golang]
 symbol = " "
 format = "[$symbol($version )]($style)"
+
+# Dev-server port for THIS workspace — nothing at all when idle, so the
+# segment's presence is the signal. Several worktrees of one project each run
+# a dev server, and this reports only the one whose process was started here.
+#
+# Both keys run the same script on purpose: its exit status decides whether the
+# segment renders, its stdout fills it. starship renders a passing `when` with
+# empty output as the glyph wrapped around nothing, so a `when` of "true" would
+# park a bare glyph in every serverless directory. The cost is that starship
+# runs the script twice per prompt when a server is up.
+#
+# symbol is U+F233, the nerd-font server glyph. Written with printf because a
+# private-use character does not survive an ordinary edit.
+[custom.devserver]
+command = "$HOME/.config/starship/devserver-port.sh"
+when = "$HOME/.config/starship/devserver-port.sh"
+symbol = " "
+format = "[ $symbol$output]($style)"
+style = "bold green"

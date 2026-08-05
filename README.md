@@ -38,6 +38,7 @@ git/.config/git/config     ->  ~/.config/git/config
 nvim/.config/nvim/          ->  ~/.config/nvim/
 tmux/.config/tmux/          ->  ~/.config/tmux/
 starship/.config/starship.toml -> ~/.config/starship.toml
+starship/.config/starship/devserver-port.sh -> ~/.config/starship/devserver-port.sh
 claude/.claude/CLAUDE.md   ->  ~/.claude/CLAUDE.md
 claude/.claude/settings.json -> ~/.claude/settings.json
 claude/.claude/statusline-command.sh -> ~/.claude/statusline-command.sh
