@@ -195,8 +195,13 @@ grep -qF '[custom.devserver]' "$TOML" \
 
 # Both keys must point at the script: the exit status gates the segment, the
 # stdout fills it. A `when` of "true" would leave a bare glyph everywhere.
-cnt="$(grep -cF 'devserver-port.sh' "$TOML")"
-assert_eq "$cnt" "2" "command and when both point at the script"
+# Anchored to the key, not just to the filename appearing somewhere on the
+# line, so a `command = "true"` next to an unrelated comment naming the
+# script can't slip through, and a future comment naming the script can't
+# break the count.
+grep -qE '^command *= *.*devserver-port\.sh' "$TOML" \
+  && pass "command runs the script rather than a placeholder" \
+  || fail "command runs the script rather than a placeholder"
 
 grep -qE '^when *= *.*devserver-port\.sh' "$TOML" \
   && pass "when runs the script rather than a placeholder" \
@@ -220,19 +225,49 @@ grep -qF 'starship/.config/starship/devserver-port.sh' "$REPO/README.md" \
 
 # ── real starship render ─────────────────────────────────────
 # Behavioural, not textual: prove the segment stays absent where no server is
-# running. Guarded on the STOWED script, because the toml points at
-# $HOME/.config/starship/devserver-port.sh — without it the command fails, the
-# segment is absent for the wrong reason and the check would pass vacuously.
-# STARSHIP_SHELL must be unset or starship wraps colours in literal \[ \].
-if command -v starship >/dev/null 2>&1 \
-  && [ -x "$HOME/.config/starship/devserver-port.sh" ]; then
-  render="$(env -u STARSHIP_SHELL STARSHIP_CONFIG="$TOML" \
+# running, and that a config which fails to parse can't hide behind that
+# absence. Runs against a config built here from the repo module's own
+# format/symbol/style, with command/when pointed at $SCRIPT (the repo copy,
+# resolved at the top of this file) instead of a $HOME path — the check then
+# depends on nothing but the repo checkout, not on stow or any $HOME state.
+# STARSHIP_SHELL must be unset or starship wraps colours in literal \[ \]
+# readline markers.
+if command -v starship >/dev/null 2>&1; then
+  devblock() { # devblock KEY -> that key's line inside [custom.devserver]
+    sed -n '/^\[custom\.devserver\]/,$p' "$TOML" | grep "^$1 *="
+  }
+
+  # A marker literal in the outer `format`, absent from starship's built-in
+  # fallback prompt: a TOML syntax error makes starship discard the whole
+  # config and render its own defaults instead, which *also* show $directory
+  # — so an absent glyph plus a directory name alone would pass on a config
+  # starship never actually parsed. The marker only appears if this file was
+  # the one that rendered.
+  MARKER="DEVSERVER_TEST_RENDER_MARKER"
+  DEVTOML="$TMP/devserver-render.toml"
+  {
+    printf 'format = "[%s](bold red)$directory${custom.devserver}"\n' "$MARKER"
+    printf '\n'
+    printf '%s\n' '[custom.devserver]'
+    printf 'command = "%s"\n' "$SCRIPT"
+    printf 'when = "%s"\n' "$SCRIPT"
+    devblock symbol
+    devblock format
+    devblock style
+  } > "$DEVTOML"
+
+  render="$(env -u STARSHIP_SHELL STARSHIP_CONFIG="$DEVTOML" \
     starship prompt --path "$TMP/plain" --logical-path "$TMP/plain" \
     --status 0 2>/dev/null)"
+
+  assert_contains "$render" "$MARKER" \
+    "the render reflects this config, not an empty or fallback prompt"
+  assert_contains "$render" "$(basename "$TMP/plain")" \
+    "the render reflects the given --path"
   assert_not_contains "$render" "$GLYPH" \
     "no segment renders in a directory with no dev server"
 else
-  echo "  skip: starship or the stowed script is missing — render check not run"
+  echo "  skip: starship is not installed — render check not run"
 fi
 
 finish
