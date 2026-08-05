@@ -384,8 +384,9 @@ install_lazygit_release() {
 # and this script also runs on macOS. Only major/minor are compared because
 # the floor's patch is 0 today; if a future floor bump needs a patch (e.g.
 # 0.64.2), extend this comparison to include it. doctor.sh's "lazygit version
-# health" check duplicates this comparison for reporting (no shared shell lib
-# between the two scripts) — keep both in sync if the floor value changes.
+# health" check duplicates this comparison for reporting — keep both in sync if
+# the floor value changes. See docs/adr/0001-no-shared-shell-library.md for why
+# there is no shared lib, and tests/test-shared-logic-sync.sh which enforces it.
 lazygit_meets_floor() {
   local out ver major minor
   command -v lazygit &>/dev/null || return 1

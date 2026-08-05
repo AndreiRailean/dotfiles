@@ -48,8 +48,9 @@ fi
 # unsupported arch, ...), can be left with a stale binary silently reading
 # the managed config's git.diffRenderers and ignoring it: no delta, no
 # warning, nothing from lazygit itself. Duplicates install.sh's
-# lazygit_meets_floor comparison (no shared shell lib between the two
-# scripts) — keep both in sync if the floor value ever changes. A missing
+# lazygit_meets_floor comparison — keep both in sync if the floor value ever
+# changes; see docs/adr/0001-no-shared-shell-library.md and
+# tests/test-shared-logic-sync.sh, which enforces it. A missing
 # lazygit is louder and different; only warn here when it's present and
 # below the floor.
 if [ "$ADOPT" -eq 0 ] && command -v lazygit >/dev/null 2>&1; then
@@ -76,6 +77,8 @@ is_ignored() { git check-ignore -q "$1" 2>/dev/null; }
 
 # Owned roots for a package: the top dir it introduces under $HOME
 # (.config/<name>) or a top-level file, derived from its tracked files.
+# Byte-identical copy in install.sh; see docs/adr/0001-no-shared-shell-library.md
+# for why, and tests/test-shared-logic-sync.sh which enforces it.
 owned_roots() {
   find "$1" -type f | while IFS= read -r f; do
     rel="${f#"$1"/}"
