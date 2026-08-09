@@ -243,10 +243,16 @@ assert_contains "$cfg" '"matcher": "Bash"' "PostToolUse matches the Bash tool"
 assert_contains "$cfg" '$HOME/.claude/hooks/adr-probe.sh' "hook path matches the stow target"
 
 # Valid JSON, or Claude Code silently ignores the whole settings file.
-if python3 -c "import json,sys; json.load(open('$SETTINGS'))" 2>/dev/null; then
-  pass "settings.json is valid JSON"
+# Guarded: python3 is not guaranteed on macOS, and an absent interpreter must
+# not masquerade as malformed JSON.
+if command -v python3 >/dev/null 2>&1; then
+  if python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+    pass "settings.json is valid JSON"
+  else
+    fail "settings.json is valid JSON"
+  fi
 else
-  fail "settings.json is valid JSON"
+  pass "settings.json JSON check skipped (no python3)"
 fi
 ```
 
@@ -1077,7 +1083,11 @@ meaningful signal over the following weeks is not a target count but whether
 any `status: rejected` record appears without being asked for — under the
 previous setup that rate was structurally zero.
 
-- [ ] **Step 7: Open the PR**
+- [ ] **Step 7: Open the PR** — *human/controller step, not for a subagent*
+
+Pushing a branch and opening a PR is outward-facing and not cleanly reversible.
+Stop after Step 6, report the baseline numbers, and let the controller bring
+this to the human partner for approval.
 
 ```bash
 git push -u origin feat/adr-capture
