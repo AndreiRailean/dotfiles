@@ -66,4 +66,32 @@ assert_eq "$?" "0" "malformed stdin exits 0"
 printf '{}' | sh "$PROBE" bogus-mode >/dev/null 2>&1
 assert_eq "$?" "0" "unknown mode exits 0"
 
+# ── hook wiring ───────────────────────────────────────────────
+# The script is only useful if settings.json actually calls it. These two drift
+# apart silently: a renamed script or a typo'd path produces no error anywhere,
+# just a system that quietly stops capturing.
+SETTINGS="$REPO/claude/.claude/settings.json"
+cfg="$(cat "$SETTINGS")"
+assert_contains "$cfg" '"PostToolUse"' "settings.json registers PostToolUse"
+assert_contains "$cfg" '"SubagentStop"' "settings.json registers SubagentStop"
+assert_contains "$cfg" 'adr-probe.sh commit' "PostToolUse calls the probe in commit mode"
+assert_contains "$cfg" 'adr-probe.sh subagent' "SubagentStop calls the probe in subagent mode"
+assert_contains "$cfg" '"matcher": "Bash"' "PostToolUse matches the Bash tool"
+
+# The path in settings.json must be the one stow creates.
+assert_contains "$cfg" '$HOME/.claude/hooks/adr-probe.sh' "hook path matches the stow target"
+
+# Valid JSON, or Claude Code silently ignores the whole settings file.
+# Guarded: python3 is not guaranteed on macOS, and an absent interpreter must
+# not masquerade as malformed JSON.
+if command -v python3 >/dev/null 2>&1; then
+  if python3 -c "import json; json.load(open('$SETTINGS'))" 2>/dev/null; then
+    pass "settings.json is valid JSON"
+  else
+    fail "settings.json is valid JSON"
+  fi
+else
+  pass "settings.json JSON check skipped (no python3)"
+fi
+
 finish
