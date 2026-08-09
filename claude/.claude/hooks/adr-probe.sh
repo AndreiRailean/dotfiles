@@ -12,15 +12,19 @@
 # the record-decision skill's job.
 #
 # It runs on EVERY Bash tool call, so the commit path uses shell `case` only —
-# no sed, no grep, no subprocesses. It must always exit 0: a hook that fails is
-# a hook that disrupts every command the agent runs.
+# no subprocesses. It must always exit 0: a hook that fails is a hook that
+# disrupts every command the agent runs.
 #
 # Usage: adr-probe.sh commit|subagent   (hook payload JSON on stdin)
 
 set -u
 
 mode="${1:-}"
-payload="$(cat 2>/dev/null || true)"
+payload=''
+while IFS= read -r line || [ -n "$line" ]; do
+  payload="$payload$line"
+  [ -z "$line" ] && break
+done
 
 # $1 = hookEventName, $2 = probe text
 emit() {
@@ -39,7 +43,7 @@ case "$mode" in
     case "$payload" in
       *'nothing to commit'*) exit 0 ;;
     esac
-    emit PostToolUse "A commit just landed. Does it encode a decision, or record an approach tried and abandoned? If yes, invoke record-decision. If no, continue silently."
+    emit PostToolUse "A git commit was attempted. If it succeeded, does it encode a decision, or record an approach tried and abandoned? If yes, invoke record-decision. If no, continue silently."
     ;;
   subagent)
     # Explore and Plan are defined as all tools EXCEPT Write. Telling them to

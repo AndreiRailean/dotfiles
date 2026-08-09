@@ -26,6 +26,13 @@ assert_eq "$out" "" "commit mode is silent on a non-commit command"
 out="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"tool_response":{"stdout":"nothing to commit, working tree clean"}}' | sh "$PROBE" commit)"
 assert_eq "$out" "" "commit mode is silent when nothing was committed"
 
+# A commit can fail for reasons other than an empty index — a pre-commit hook
+# rejection, a signing failure, a conflict. Enumerating git's failure modes is
+# whack-a-mole, so the probe must not assert that anything landed.
+out="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"tool_response":{"stdout":"","stderr":"error: failed to push some refs"}}' | sh "$PROBE" commit)"
+assert_contains "$out" 'attempted' "commit mode does not claim a failed commit landed"
+assert_not_contains "$out" 'just landed' "commit mode never asserts a commit landed"
+
 # ── subagent mode ─────────────────────────────────────────────
 # Write-capable agents are told to record it themselves.
 out="$(printf '%s' '{"agent_type":"general-purpose","agent_id":"a1"}' | sh "$PROBE" subagent)"
