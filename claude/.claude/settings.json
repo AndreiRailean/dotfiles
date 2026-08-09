@@ -1,4 +1,8 @@
 {
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "permissions": {
     "defaultMode": "auto"
   },
@@ -14,22 +18,19 @@
     "claude-md-management@claude-plugins-official": false,
     "vercel@claude-plugins-official": false,
     "commit-commands@claude-plugins-official": true,
-    "supabase@claude-plugins-official": true,
+    "supabase@claude-plugins-official": false,
     "stripe@claude-plugins-official": false,
-    "mattpocock-skills@mattpocock": true,
-    "mattpocock-skills@claude-plugins-official": true
+    "mattpocock-skills@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "mattpocock": {
       "source": {
         "source": "github",
         "repo": "mattpocock/skills"
-      }
+      },
+      "autoUpdate": true
     }
-  },
-  "attribution": {
-    "commit": "",
-    "pr": ""
   },
   "fastModePerSessionOptIn": true,
   "theme": "auto",
