@@ -279,6 +279,58 @@ This deploys globally and will fire in every repo.
 - `CONTEXT-MAP.md` present → resolve the context-scoped `docs/adr/` per
   `domain.md`.
 
+## Dependencies and portability
+
+The mechanism is machine-global; the convention must be repo-local.
+
+| | Lives in | Travels with |
+|---|---|---|
+| `record-decision` skill, `adr-probe.sh`, hooks block | dotfiles → `~/.claude/` | **the user**, not the repo |
+| Record format, statuses, gates | `docs/agents/domain.md` | **the repo** |
+
+Putting everything in the skill body works on machines with these dotfiles and
+fails everywhere else — a collaborator, a CI agent, a Pi or Codex session, or
+the same user on a box without dotfiles. None can produce a conforming record
+because nothing in the repo says what one is.
+
+So `docs/agents/domain.md`, which today governs consumption only, becomes the
+**format contract**: frontmatter fields, the five statuses, date-stem naming,
+and what a rejection must contain. Any agent that reads it can then write a
+valid record when asked. The skill narrows to *triggering and procedure* — when
+to write, plus redaction and dedup. The repo owns what a record **is**; the
+machine owns when one **gets written**. No rule is stated twice, and domain.md
+is read on demand, so this costs nothing standing.
+
+`record-decision` seeds the ADR section of `domain.md` if it is absent when
+first writing in a repo, so a new repo needs no external setup.
+
+### What is required
+
+- **Dotfiles installed.** `claude` is already in `PACKAGES` (`install.sh:156`,
+  `doctor.sh:24`), so files added under `claude/.claude/` are stowed and
+  drift-checked with no wiring changes.
+- **A new session.** `~/.claude/skills/<name>/` auto-loads *next* session as
+  `<name>@skills-dir`; it is not picked up by the session that installed it.
+
+### What is not required
+
+- **The `mattpocock-skills` plugin.** It seeded `docs/agents/domain.md` via
+  `/setup-matt-pocock-skills`, but that file is now a repo-local artifact.
+  `record-decision` carries its own gates and format and never invokes
+  `domain-modeling`. The plugin remains useful for `CONTEXT.md` glossary
+  maintenance and interactive design-time ADRs, but is not load-bearing here.
+
+### Known risk: two writers, two format sources
+
+`domain-modeling` writes ADRs from its own bundled `ADR-FORMAT.md` — sequential
+numbering, bold status line — which conflicts with this format, and it
+auto-updates, so upstream can change without warning. The mitigation is to make
+`docs/agents/domain.md` the repo's stated authority and record the override
+there. That is a convention, not a mechanism: a `domain-modeling` invocation
+that does not read domain.md first can still emit a non-conforming record. Such
+records remain readable (the divergences are narrow) and can be normalised by
+hand. Revisit if it happens more than occasionally.
+
 ## Failure modes
 
 | Mode | Mitigation |
@@ -291,15 +343,23 @@ This deploys globally and will fire in every repo.
 | **Unwanted repos** | Silent exit outside a git repo. A `.no-adr` opt-out only if it proves necessary |
 | **Worktree divergence** | Date-stems cannot collide; merges cleanly unless two agents pick the same slug |
 | **Per-Bash-call subprocess cost** | Script stays trivial; measure if noticeable |
+| **Subagent cannot write** — `Explore` and `Plan` are defined as all tools *except* `Write`, so they can reach the gate and be unable to act on it | Probe inspects `agent_type` from the `SubagentStop` payload; for write-less types it instructs the agent to return the finding as text for the parent to record |
+| **Other harnesses have no hooks** — `PostToolUse`/`SubagentStop` are Claude Code constructs, absent in Pi and Codex | Capture degrades to model judgment against `docs/agents/domain.md`. This is the main reason the format contract is repo-local |
+| **Collaborators produce nothing** — anyone without these dotfiles commits normally and triggers nothing | Accepted. This is the case the out-of-scope CI backstop would cover |
 
 ## Migrations
 
 1. `docs/adr/0001-no-shared-shell-library.md` → `20260805-no-shared-shell-library.md`
    via `git mv`; convert the `**Status:** … · **Date:** …` line to frontmatter
    and add a `summary`. Content unchanged.
-2. `docs/agents/domain.md` documents sequential numbering with `0001-…` /
-   `0002-…` examples. Update to the date-stem convention, or agents keep reading
-   the old rule.
+2. `docs/agents/domain.md` is promoted from a consumption guide to the repo's
+   **format contract**. It currently documents sequential numbering with
+   `0001-…` / `0002-…` examples, which must change to date-stems, but the
+   larger change is additive — it gains the frontmatter field list, the five
+   statuses, what a rejection must contain, and an explicit statement that this
+   repo's format overrides any skill's bundled template. Without this, the repo
+   is unreadable to any agent lacking these dotfiles (see Dependencies and
+   portability).
 
 ## Out of scope
 
