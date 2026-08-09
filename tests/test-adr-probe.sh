@@ -33,6 +33,18 @@ out="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git commit -m x
 assert_contains "$out" 'attempted' "commit mode does not claim a failed commit landed"
 assert_not_contains "$out" 'just landed' "commit mode never asserts a commit landed"
 
+# The payload is JSON on stdin with no guarantee of being one line and no
+# guarantee of a trailing newline. The read loop is the only thing between a
+# multi-line payload and a silently missed match, so it gets tested directly.
+out="$(printf '{\n  "tool_input": {\n    "command": "git commit -m x"\n  }\n}\n' | sh "$PROBE" commit)"
+assert_contains "$out" 'record-decision' "multi-line payload still matches"
+
+out="$(printf '%s' '{"tool_input":{"command":"git commit -m x"}}' | sh "$PROBE" commit)"
+assert_contains "$out" 'record-decision' "payload without a trailing newline still matches"
+
+out="$(printf 'noise\n\nmore noise git commit here\n' | sh "$PROBE" commit)"
+assert_contains "$out" 'record-decision' "a blank line mid-payload does not truncate"
+
 # ── subagent mode ─────────────────────────────────────────────
 # Write-capable agents are told to record it themselves.
 out="$(printf '%s' '{"agent_type":"general-purpose","agent_id":"a1"}' | sh "$PROBE" subagent)"

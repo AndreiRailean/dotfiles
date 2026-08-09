@@ -21,9 +21,10 @@ set -u
 
 mode="${1:-}"
 payload=''
+line=''
 while IFS= read -r line || [ -n "$line" ]; do
   payload="$payload$line"
-  [ -z "$line" ] && break
+  line=''
 done
 
 # $1 = hookEventName, $2 = probe text
