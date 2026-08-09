@@ -361,6 +361,17 @@ hand. Revisit if it happens more than occasionally.
    is unreadable to any agent lacking these dotfiles (see Dependencies and
    portability).
 
+### Other repos: coexistence, not migration
+
+The two migrations above apply to this repo only. When `record-decision` lands
+in a different repo that already has sequentially numbered ADRs, it leaves them
+alone and writes new records date-stemmed. `domain.md` documents the current
+convention; the older files remain valid history.
+
+Both forms parse and both sort, and a forced rename across an unfamiliar repo
+risks breaking inbound links for tidiness that buys nothing. Renaming is always
+available later as a deliberate act.
+
 ## Out of scope
 
 Deliberately excluded, and each is a plausible later addition:
