@@ -45,26 +45,19 @@ assert_contains "$out" 'record-decision' "payload without a trailing newline sti
 out="$(printf 'noise\n\nmore noise git commit here\n' | sh "$PROBE" commit)"
 assert_contains "$out" 'record-decision' "a blank line mid-payload does not truncate"
 
-# ── subagent mode ─────────────────────────────────────────────
-# Write-capable agents are told to record it themselves.
-out="$(printf '%s' '{"agent_type":"general-purpose","agent_id":"a1"}' | sh "$PROBE" subagent)"
-assert_contains "$out" 'SubagentStop' "subagent mode names the SubagentStop event"
-assert_contains "$out" 'record-decision' "write-capable agent is told to invoke the skill"
-
-# Explore and Plan are defined as all tools EXCEPT Write, so telling them to
-# write a file sends them into a wall. They report back as text instead.
-out="$(printf '%s' '{"agent_type":"Explore","agent_id":"a2"}' | sh "$PROBE" subagent)"
-assert_contains "$out" 'final message' "write-less agent is told to report as text"
-assert_not_contains "$out" 'invoke record-decision' "write-less agent is not told to write"
-
 # ── never disruptive ──────────────────────────────────────────
 # Unknown mode, empty stdin, garbage stdin: all silent, all exit 0.
 printf '' | sh "$PROBE" commit >/dev/null 2>&1
 assert_eq "$?" "0" "empty stdin exits 0"
-printf 'not json at all' | sh "$PROBE" subagent >/dev/null 2>&1
+printf 'not json at all' | sh "$PROBE" commit >/dev/null 2>&1
 assert_eq "$?" "0" "malformed stdin exits 0"
 printf '{}' | sh "$PROBE" bogus-mode >/dev/null 2>&1
 assert_eq "$?" "0" "unknown mode exits 0"
+
+# The SubagentStop trigger was removed after its probe destroyed a subagent's
+# return value. `subagent` must now be an unknown mode like any other.
+out="$(printf '%s' '{"agent_type":"general-purpose"}' | sh "$PROBE" subagent)"
+assert_eq "$out" "" "subagent mode no longer emits anything"
 
 # ── hook wiring ───────────────────────────────────────────────
 # The script is only useful if settings.json actually calls it. These two drift
@@ -73,10 +66,9 @@ assert_eq "$?" "0" "unknown mode exits 0"
 SETTINGS="$REPO/claude/.claude/settings.json"
 cfg="$(cat "$SETTINGS")"
 assert_contains "$cfg" '"PostToolUse"' "settings.json registers PostToolUse"
-assert_contains "$cfg" '"SubagentStop"' "settings.json registers SubagentStop"
 assert_contains "$cfg" 'adr-probe.sh commit' "PostToolUse calls the probe in commit mode"
-assert_contains "$cfg" 'adr-probe.sh subagent' "SubagentStop calls the probe in subagent mode"
 assert_contains "$cfg" '"matcher": "Bash"' "PostToolUse matches the Bash tool"
+assert_not_contains "$cfg" 'SubagentStop' "settings.json no longer registers SubagentStop"
 
 # The path in settings.json must be the one stow creates.
 assert_contains "$cfg" '$HOME/.claude/hooks/adr-probe.sh' "hook path matches the stow target"

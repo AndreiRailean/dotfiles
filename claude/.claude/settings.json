@@ -17,16 +17,6 @@
           }
         ]
       }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh $HOME/.claude/hooks/adr-probe.sh subagent"
-          }
-        ]
-      }
     ]
   },
   "statusLine": {

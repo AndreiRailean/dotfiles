@@ -15,7 +15,7 @@
 # no subprocesses. It must always exit 0: a hook that fails is a hook that
 # disrupts every command the agent runs.
 #
-# Usage: adr-probe.sh commit|subagent   (hook payload JSON on stdin)
+# Usage: adr-probe.sh commit   (hook payload JSON on stdin)
 
 set -u
 
@@ -45,20 +45,6 @@ case "$mode" in
       *'nothing to commit'*) exit 0 ;;
     esac
     emit PostToolUse "A git commit was attempted. If it succeeded, does it encode a decision, or record an approach tried and abandoned? If yes, invoke record-decision. If no, continue silently."
-    ;;
-  subagent)
-    # Explore and Plan are defined as all tools EXCEPT Write. Telling them to
-    # write a file sends them into a wall, so they report back as text and the
-    # parent records it.
-    agent_type=$(printf '%s' "$payload" | sed -n 's/.*"agent_type":"\([^"]*\)".*/\1/p')
-    case "$agent_type" in
-      Explore|Plan)
-        emit SubagentStop "Before returning: if you found a decision or a dead end worth recording, state it plainly in your final message. You do not have Write access, so the parent will record it."
-        ;;
-      *)
-        emit SubagentStop "Before returning: does your work encode a decision, or record an approach tried and abandoned? If yes, invoke record-decision. If no, return silently."
-        ;;
-    esac
     ;;
   *)
     exit 0
