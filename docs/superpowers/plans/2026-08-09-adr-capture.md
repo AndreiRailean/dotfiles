@@ -4,7 +4,15 @@
 
 **Goal:** Make architectural decisions and rejected approaches get written to `docs/adr/` automatically, without the user invoking anything.
 
-**Architecture:** Two Claude Code hooks (`PostToolUse` on Bash, `SubagentStop`) run a tiny POSIX shell script that emits a ~25-token probe question. The probe performs no judgment and writes no files. A model-invocable `record-decision` skill decides the answer and writes the record. The repo owns the *format* (`docs/agents/domain.md`); the machine owns the *triggering* (dotfiles-deployed skill + hooks).
+**Architecture:** A Claude Code `PostToolUse` hook on Bash runs a tiny POSIX shell script that emits a ~25-token probe question. The probe performs no judgment and writes no files. A model-invocable `record-decision` skill decides the answer and writes the record. The repo owns the *format* (`docs/agents/domain.md`); the machine owns the *triggering* (dotfiles-deployed skill + hook).
+
+> **Amended during execution (2026-08-11).** A second hook on `SubagentStop` was
+> built, registered, and removed after it destroyed a real code review: its
+> `additionalContext` is delivered *to the subagent*, which answered the probe
+> instead of returning its work. Tasks 1 and 2 below are left as originally
+> written — they record what was implemented at the time — and Task 2b removes
+> the trigger. See the spec's *Dropped trigger* section and the rejected ADR in
+> Task 6 Step 3b.
 
 **Tech Stack:** POSIX `sh`, GNU Stow, Claude Code hooks (`settings.json`), Markdown with YAML frontmatter. Tests are POSIX `sh` using `tests/lib.sh`.
 
@@ -15,10 +23,10 @@
 - **POSIX `sh`, not bash.** `tests/run.sh` invokes `sh "$t"`. No `[[`, no arrays, no `local`.
 - **No GNU-only tools.** These dotfiles run on macOS, WSL and Linux. No `find -printf`, no `sort -V`, no `readlink -f`.
 - **`adr-probe.sh` must always `exit 0`.** It runs on every Bash tool call; a non-zero exit must never disrupt a session.
-- **No subprocesses on the hot path.** Commit-mode matching uses shell `case` only. `sed` is permitted in subagent mode, which fires rarely.
+- **No subprocesses on the hot path.** The script runs on every Bash call: stdin is read with a builtin loop, and matching uses shell `case` only. No forks anywhere.
 - **Conventional Commits**, per `AGENTS.md`: `type(scope): description`, imperative, lower-case subject, why in the body.
 - **Branch:** all work on `feat/adr-capture`. Do not commit to `master`.
-- **Leave `claude/.claude/settings.json`'s existing uncommitted changes alone** — they are unrelated plugin churn. Stage only the `hooks` key you add.
+- ~~Leave `claude/.claude/settings.json`'s uncommitted changes alone~~ — **resolved.** The plugin churn was committed separately in `be3f614` before Task 1. Stage `settings.json` normally.
 - **ADR filenames:** `YYYYMMDD-slug.md`, no `ADR-` prefix, in `docs/adr/`.
 - **ADR frontmatter required fields:** `type`, `status`, `date`, `summary`.
 - **Status values:** `proposed | accepted | rejected | superseded | deprecated`.
@@ -319,6 +327,101 @@ script or a mistyped path raises no error anywhere, it just stops capturing."
 ```
 
 > **Note:** if `git status` shows unrelated plugin changes in `settings.json`, use `git add -p` and stage only the `hooks` hunk.
+
+---
+
+### Task 2b: Remove the SubagentStop trigger
+
+*Added during execution. See the amendment note at the top of this plan.*
+
+**Files:**
+- Modify: `claude/.claude/hooks/adr-probe.sh` — delete `subagent` mode
+- Modify: `tests/test-adr-probe.sh` — delete the subagent assertions
+- Already done by the controller: `claude/.claude/settings.json` — `SubagentStop` block removed (uncommitted)
+
+**Interfaces:**
+- Consumes: the probe script from Task 1.
+- Produces: `adr-probe.sh commit` — one mode. Any other argument, including `subagent`, exits 0 silently.
+
+**Why:** the `SubagentStop` probe destroyed a completed code review. `additionalContext` on that event is delivered *to the subagent*, which answered the probe instead of returning its work. The trigger is being removed, not repaired — the failure is silent, and the thing it corrupts is the primary work product.
+
+- [ ] **Step 1: Delete the subagent assertions from the test**
+
+Remove the whole `── subagent mode ──` block from `tests/test-adr-probe.sh` (four assertions covering `general-purpose` and `Explore`).
+
+In the `── never disruptive ──` block, one line invokes the script with `subagent`:
+
+```sh
+printf 'not json at all' | sh "$PROBE" subagent >/dev/null 2>&1
+assert_eq "$?" "0" "malformed stdin exits 0"
+```
+
+Keep the assertion but change `subagent` to `commit`, so it still tests malformed stdin against a live mode rather than a removed one.
+
+Then add one assertion proving the mode is gone, in the `── never disruptive ──` block:
+
+```sh
+# The SubagentStop trigger was removed after its probe destroyed a subagent's
+# return value. `subagent` must now be an unknown mode like any other.
+out="$(printf '%s' '{"agent_type":"general-purpose"}' | sh "$PROBE" subagent)"
+assert_eq "$out" "" "subagent mode no longer emits anything"
+```
+
+- [ ] **Step 2: Run the test and watch the new assertion fail**
+
+Run: `sh tests/test-adr-probe.sh`
+Expected: FAIL on `subagent mode no longer emits anything` — the script still has the mode.
+
+- [ ] **Step 3: Delete `subagent` mode from the script**
+
+In `claude/.claude/hooks/adr-probe.sh`, delete the entire `subagent)` branch of the `case "$mode"` statement — including the `agent_type` extraction via `sed` and the `Explore|Plan` sub-case. The `*)` catch-all already exits 0, so `subagent` falls through to it with no further change.
+
+Update the usage comment at the top of the file:
+
+```sh
+# Usage: adr-probe.sh commit   (hook payload JSON on stdin)
+```
+
+The header comment block also states that `sed` is used in subagent mode. Remove that sentence — after this change there are no forks anywhere in the script.
+
+- [ ] **Step 4: Run the tests**
+
+```bash
+sh tests/test-adr-probe.sh
+sh tests/run.sh
+```
+
+Expected: `PASS`, then `ALL TESTS PASSED`.
+
+- [ ] **Step 5: Verify no `subagent` references remain in the shipped files**
+
+```bash
+grep -n subagent claude/.claude/hooks/adr-probe.sh claude/.claude/settings.json
+```
+
+Expected: no output except, at most, the new test's explanatory comment in `tests/test-adr-probe.sh` (not searched here).
+
+- [ ] **Step 6: Commit**
+
+Stage the script, the test, and the controller's already-made `settings.json` edit together — they are one logical change.
+
+```bash
+git add claude/.claude/hooks/adr-probe.sh tests/test-adr-probe.sh claude/.claude/settings.json
+git commit -m "revert(claude): drop the SubagentStop ADR probe
+
+The probe was delivered to the subagent rather than alongside its result, so
+the agent answered it instead of returning its work. A code reviewer completed
+a full review, then returned only 'No decision to record.' — the review was
+destroyed.
+
+additionalContext on SubagentStop is documented as feedback delivered to the
+subagent; its purpose is to tell an agent to keep working. There is no channel
+there for a question that must not alter what the agent returns.
+
+Removing rather than rewording: the failure is silent, and what it corrupts is
+the primary work product. Commit-time capture still fires in the parent, which
+already receives the subagent's findings in the return value."
+```
 
 ---
 
@@ -842,6 +945,7 @@ are covered without anyone remembering to extend the test."
 - Create: `docs/adr/20260809-one-record-type-status-lifecycle.md`
 - Create: `docs/adr/20260809-editing-plugin-cache-skills.md`
 - Create: `docs/adr/20260809-rules-in-skill-body.md`
+- Create: `docs/adr/20260811-subagentstop-adr-probe.md`
 
 **Interfaces:**
 - Consumes: the contract from Task 4 and the validator from Task 5.
@@ -1000,7 +1104,84 @@ request in every project, permanently, and this record exists to explain why
 it was not done.
 ```
 
-- [ ] **Step 4: Validate all three against the contract**
+- [ ] **Step 3b: Write the fourth record**
+
+This one was earned during implementation rather than design — the trigger was
+built, registered, and destroyed a real code review before being removed.
+
+Create `docs/adr/20260811-subagentstop-adr-probe.md`:
+
+```markdown
+---
+type: ADR
+status: rejected
+date: 2026-08-11
+summary: A SubagentStop hook probe is delivered to the subagent, which answers
+  it instead of returning its work, silently destroying the return value.
+---
+
+# Probing for ADRs on SubagentStop
+
+## Context
+
+Delegated agents discover things the parent never sees. A subagent that tries
+an approach and abandons it returns a conclusion, not the dead end — so the
+delegation boundary looked like the right place to capture knowledge that would
+otherwise be discarded. `SubagentStop` fires there and accepts
+`additionalContext`, so the mechanism appeared to exist.
+
+## What was tried
+
+A `SubagentStop` hook running `adr-probe.sh subagent`, emitting:
+
+> Before returning: does your work encode a decision, or record an approach
+> tried and abandoned? If yes, invoke record-decision. If no, return silently.
+
+with a separate branch for `Explore` and `Plan`, which hold every tool except
+`Write` and so cannot record anything themselves.
+
+## How it failed
+
+The probe replaced the subagent's return value instead of accompanying it.
+
+A code reviewer dispatched during this project's own build completed a full
+review — 44k tokens, seven tool calls — and then returned exactly
+`No decision to record.` It had answered the probe. The review was gone.
+
+`additionalContext` on `SubagentStop` is documented as *"non-error feedback
+delivered to the subagent"*. Its purpose is to tell an agent to keep working.
+There is no channel there for a question the agent should act on without
+altering what it returns, and "return silently" reads as an instruction about
+the final message.
+
+The failure is silent. It was caught only because that reply was visibly not a
+code review. A subtler task would have returned something plausible and the
+loss would never have been noticed.
+
+## What would make it viable
+
+Nothing available today. Rewording was considered — telling the agent its final
+message must be preserved — but that relies on model compliance for a failure
+mode that is undetectable when it recurs, and the cost of a miss is the primary
+work product.
+
+It would become viable if the harness gained a channel that delivers to the
+**parent** on subagent completion, the way `PostToolUse` delivers to the caller.
+`PostToolUse` works precisely because the probe sits beside the tool result
+rather than in place of it.
+
+Nothing was lost by removing it: the parent already receives the subagent's
+findings in the return value and can record them, and commit-time capture still
+fires in the parent when that work lands.
+
+## Consequences
+
+`adr-probe.sh` keeps only `commit` mode. The `agent_type` inspection and the
+`Explore`/`Plan` branch went with it — the sole remaining caller passes a fixed
+mode, so the argument survives only as a guard against a future second caller.
+```
+
+- [ ] **Step 4: Validate all four against the contract**
 
 ```bash
 sh tests/test-adr-format.sh
@@ -1012,7 +1193,7 @@ Expected: `PASS` including the new files, then `ALL TESTS PASSED`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docs/adr/20260809-*.md
+git add docs/adr/20260809-*.md docs/adr/20260811-*.md
 git commit -m "docs(adr): record the decisions behind ADR capture
 
 Three records the design produced. The rejection is the one that matters: it

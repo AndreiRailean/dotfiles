@@ -105,7 +105,9 @@ One script, two hook registrations. It performs no judgment and writes no files
 | Hook | Matcher | Fires on |
 |---|---|---|
 | `PostToolUse` | `Bash` | every Bash call; script filters for `git commit` |
-| `SubagentStop` | — | every delegated agent returning |
+
+`SubagentStop` was designed in and **removed during implementation** — see
+Dropped trigger below.
 
 Matchers match the **tool name**, not command text, so the PostToolUse hook is
 invoked on every Bash call and must itself inspect `tool_input.command` from the
@@ -120,16 +122,41 @@ Output on a hit:
   "additionalContext": "A commit just landed. Does it encode a decision, or record an approach tried and abandoned? If yes, invoke record-decision. If no, continue silently."}}
 ```
 
-Both `PostToolUse` and `SubagentStop` accept `additionalContext` (verified
-against the 2.1.224 bundle). Note that on `SubagentStop` it is *"delivered to
-the subagent"*, not the parent — so a subagent writes its own record. Date-stem
-IDs make this safe without locking.
+`PostToolUse` accepts `additionalContext` (verified against the 2.1.224
+bundle), and it is delivered to the session that made the tool call — the probe
+sits alongside the tool result and does not displace anything.
 
-### Third trigger
+`SubagentStop` also accepts the field, but there it is *"delivered to the
+subagent"*. That difference looked like a detail during design and turned out
+to be disqualifying; see Dropped trigger below.
 
-Model judgment mid-session, via the skill firing on its own. This is the weakest
-of the three — it is the mechanism demonstrably not firing today — and is
-retained but not relied upon. The two hook-driven triggers are structural.
+### Dropped trigger: `SubagentStop`
+
+The design registered a second hook on `SubagentStop`, to capture knowledge at
+the delegation boundary. **It was removed during implementation, after it
+corrupted a subagent's return value in this project's own build.**
+
+`additionalContext` on `SubagentStop` is documented as *"non-error feedback
+delivered to the subagent"* — its purpose is to tell an agent to keep working.
+Used as a side-channel question, it does not sit beside the agent's final
+message; the agent answers it *instead*. A code reviewer completed a full
+review — 44k tokens, seven tool calls — then returned only `No decision to
+record.`, an answer to the probe. The review was destroyed.
+
+The failure is silent. It was caught only because that reply was obviously not
+a code review; a subtler case would have read as a plausible result. A
+mechanism whose failure mode is undetectable corruption of the primary work
+product cannot be traded against a marginal capture gain.
+
+Nothing is actually lost. The parent receives the subagent's findings in the
+return value and can record them itself, and commit-time capture still fires in
+the parent when that work lands. Recorded as a rejected ADR.
+
+### Second trigger
+
+Model judgment mid-session, via the skill firing on its own. This is the weaker
+of the two survivors — it is the mechanism demonstrably not firing today — and
+is retained but not relied upon. The commit hook is the structural one.
 
 ## Status lifecycle
 
@@ -343,8 +370,8 @@ hand. Revisit if it happens more than occasionally.
 | **Unwanted repos** | Silent exit outside a git repo. A `.no-adr` opt-out only if it proves necessary |
 | **Worktree divergence** | Date-stems cannot collide; merges cleanly unless two agents pick the same slug |
 | **Per-Bash-call subprocess cost** | Script stays trivial; measure if noticeable |
-| **Subagent cannot write** — `Explore` and `Plan` are defined as all tools *except* `Write`, so they can reach the gate and be unable to act on it | Probe inspects `agent_type` from the `SubagentStop` payload; for write-less types it instructs the agent to return the finding as text for the parent to record |
-| **Other harnesses have no hooks** — `PostToolUse`/`SubagentStop` are Claude Code constructs, absent in Pi and Codex | Capture degrades to model judgment against `docs/agents/domain.md`. This is the main reason the format contract is repo-local |
+| **Subagent return corrupted** — a `SubagentStop` probe is delivered to the subagent, which answers it *instead of* returning its work | Trigger removed. Observed destroying a completed code review; see Dropped trigger |
+| **Other harnesses have no hooks** — `PostToolUse` is a Claude Code construct, absent in Pi and Codex | Capture degrades to model judgment against `docs/agents/domain.md`. This is the main reason the format contract is repo-local |
 | **Collaborators produce nothing** — anyone without these dotfiles commits normally and triggers nothing | Accepted. This is the case the out-of-scope CI backstop would cover |
 
 ## Migrations
