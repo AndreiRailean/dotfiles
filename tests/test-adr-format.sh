@@ -25,6 +25,17 @@ assert_not_contains "$d" "0001-event-sourced-orders.md" "old sequential example 
 # ── every record conforms ─────────────────────────────────────
 # Applies to the whole directory rather than a list, so records added later are
 # covered without anyone remembering to extend this test.
+
+# A glob that matches nothing expands to itself, so the loop below would run
+# zero assertions and report success. A validator with nothing to validate is
+# a failure, not a pass.
+n=0
+for f in "$REPO"/docs/adr/*.md; do
+  [ -f "$f" ] && n=$((n + 1))
+done
+[ "$n" -gt 0 ] && pass "docs/adr/ contains at least one record" \
+  || fail "docs/adr/ contains at least one record (glob matched nothing)"
+
 for f in "$REPO"/docs/adr/*.md; do
   [ -f "$f" ] || continue
   n="$(basename "$f")"

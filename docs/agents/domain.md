@@ -77,8 +77,13 @@ someone actually spent effort on.
 locally, so parallel agents and worktrees cannot collide the way sequential
 numbering does.
 
-Repos already using `0001-` style keep those files. New records are
-date-stemmed; do not migrate.
+When adopting this convention in a repo that already has `0001-` style records,
+leave them where they are and date-stem only new ones. Both forms sort and
+parse, and a bulk rename risks breaking inbound links for tidiness that buys
+nothing.
+
+A repo may still migrate deliberately — this one did, having a single record at
+the time — but that is a choice, not a step in adopting the convention.
 
 ### Frontmatter
 
