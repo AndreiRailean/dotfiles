@@ -17,7 +17,7 @@
 # │                                                                           │
 # │   herdr --version                       # note the new version            │
 # │   prefix+shift+G                        # make a throwaway worktree       │
-# │   # expect: "claude | lazygit" tabs, claude left, focus left              │
+# │   # expect: one "claude" tab, split in two, claude left, focus left       │
 # │   tail ~/.local/state/herdr/autolayout.log                                │
 # │   prefix+shift+L                        # and the manual path             │
 # │                                                                           │
@@ -44,10 +44,10 @@ name = "tokyo-night"
 # herdr's default keymap (pane nav prefix+h/j/k/l, splits prefix+v / prefix+-).
 prefix = "ctrl+a"
 
-# Apply the worktree layout (claude | shell, plus a lazygit tab) to the current
-# workspace by hand — for a workspace that predates the auto-layout daemon, or
-# one you've since rearranged. Same code path the daemon uses, and idempotent,
-# so pressing it twice is harmless.
+# Apply the worktree layout (claude | shell) to the current workspace by hand —
+# for a workspace that predates the auto-layout daemon, or one you've since
+# rearranged. Same code path the daemon uses, and idempotent, so pressing it
+# twice is harmless.
 #
 # "popup" rather than "pane": a popup is session-modal and doesn't alter the tab
 # layout, which matters because the script decides whether to split by counting

@@ -326,9 +326,7 @@ if ! command -v herdr &>/dev/null; then
 fi
 
 # ── lazygit (git TUI) ────────────────────────────────────────
-# Must come before the auto-layout section at the end of this script: that
-# daemon opens a `lazygit` tab in every new worktree, so without the binary a
-# fresh machine gets a tab that dies on launch.
+# Launched by hand when it's wanted — nothing in this repo starts it for you.
 #
 # Only the upstream release is installed here — never the distro package
 # (see Amendment 1 in the plan). lazygit 0.64 replaced the git.paging config

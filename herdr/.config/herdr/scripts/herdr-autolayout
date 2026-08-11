@@ -4,7 +4,6 @@
     ┌────────────────┬────────────────┐   tab 1: "claude"
     │ claude         │ plain shell    │   left pane focused
     └────────────────┴────────────────┘
-    tab 2: "lazygit"
 
 Two entry points, one implementation:
 
@@ -27,14 +26,14 @@ manifest. Calling the same function is simpler and works even when the target
 workspace is not focused.
 
 Arranging is idempotent, so pressing the key twice is harmless: the split only
-happens when the tab has a single pane, the lazygit tab is reused when one
-already exists, and a command is only sent when it is not already running.
+happens when the tab has a single pane, and a command is only sent when it is
+not already running.
 
-Commands are typed into panes with `pane send-text`, because neither
-`pane split` nor `tab create` accepts a --command. That makes shell readiness
-the whole problem: text sent before the shell reaches its prompt is echoed to
-the screen and then discarded, because the newline arrives before readline is
-listening. A slow WSL shell (~5s to source rc files here) loses it every time.
+Commands are typed into panes with `pane send-text`, because `pane split` does
+not accept a --command. That makes shell readiness the whole problem: text sent
+before the shell reaches its prompt is echoed to the screen and then discarded,
+because the newline arrives before readline is listening. A slow WSL shell (~5s
+to source rc files here) loses it every time.
 
 Two things guard against that, because neither is sufficient alone:
 
@@ -64,11 +63,9 @@ Config via environment (all optional):
   HERDR_AUTOLAYOUT_LEFT_CMD    command for the left pane (default: claude;
                                empty string leaves it a plain shell)
   HERDR_AUTOLAYOUT_RIGHT_CMD   command for the right pane (default: none)
-  HERDR_AUTOLAYOUT_LAZYGIT_CMD lazygit tab command (empty skips the tab)
-  HERDR_AUTOLAYOUT_LAZYGIT_TAB label for the lazygit tab (default: lazygit)
   HERDR_AUTOLAYOUT_MAIN_TAB    label for the first tab (default: claude;
                                empty leaves herdr's numbered label alone)
-  HERDR_AUTOLAYOUT_FOCUS       left (default) | right | lazygit | none
+  HERDR_AUTOLAYOUT_FOCUS       left (default) | right | none
   HERDR_AUTOLAYOUT_DIRECTION   right (default) | down
   HERDR_AUTOLAYOUT_RATIO       split ratio, e.g. 0.5
   HERDR_AUTOLAYOUT_READY_SECS  seconds to wait for a shell prompt (default 90)
@@ -95,8 +92,6 @@ LOG = os.path.join(XDG_STATE, "herdr", "autolayout.log")
 
 LEFT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LEFT_CMD", "claude")
 RIGHT_CMD = os.environ.get("HERDR_AUTOLAYOUT_RIGHT_CMD", "")
-LAZYGIT_CMD = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_CMD", "lazygit")
-LAZYGIT_TAB = os.environ.get("HERDR_AUTOLAYOUT_LAZYGIT_TAB", "lazygit")
 MAIN_TAB = os.environ.get("HERDR_AUTOLAYOUT_MAIN_TAB", "claude")
 FOCUS = os.environ.get("HERDR_AUTOLAYOUT_FOCUS", "left")
 DIRECTION = os.environ.get("HERDR_AUTOLAYOUT_DIRECTION", "right")
@@ -187,8 +182,8 @@ def panes_in_tab(workspace_id, tab_id):
 def new_pane_after(workspace_id, before, action, attempts=20):
     """Run action(), then return the pane id that appeared.
 
-    Neither `pane split` nor `tab create` is documented to return a pane id, so
-    diff the workspace's pane set instead of parsing their output.
+    `pane split` is not documented to return a pane id, so diff the workspace's
+    pane set instead of parsing its output.
     """
     if action() is None:
         return None
@@ -315,7 +310,7 @@ def arrange(ws):
     tab_meta = next((t for t in tabs_of(ws_id) if t.get("tab_id") == tab_id), None)
     pane_count = tab_meta.get("pane_count") if tab_meta else len(in_tab)
 
-    # Name the main tab, so it reads "claude | lazygit" rather than "1 | lazygit".
+    # Name the main tab, so it reads "claude" rather than herdr's bare "1".
     # Skipped when it already matches, to keep repeated runs silent.
     if MAIN_TAB and (not tab_meta or tab_meta.get("label") != MAIN_TAB):
         if herdr("tab", "rename", tab_id, MAIN_TAB) is None:
@@ -323,7 +318,7 @@ def arrange(ws):
         else:
             log(f"  renamed {tab_id} -> {MAIN_TAB!r}")
 
-    # ── Build the whole layout first, so every shell boots in parallel ──
+    # ── Split first, so both shells boot in parallel ──
     if pane_count and pane_count > 1:
         right = in_tab[1] if len(in_tab) > 1 else None
         log(f"  split already present ({right})")
@@ -340,25 +335,6 @@ def arrange(ws):
         else:
             log("  ! split failed or new pane not found")
 
-    lazygit = None
-    if LAZYGIT_CMD:
-        existing = next(
-            (t for t in tabs_of(ws_id) if t.get("label") == LAZYGIT_TAB), None
-        )
-        if existing:
-            found = panes_in_tab(ws_id, existing.get("tab_id"))
-            lazygit = found[0] if found else None
-            log(f"  {LAZYGIT_TAB} tab already present ({lazygit})")
-        else:
-            tab = ["tab", "create", "--workspace", ws_id, "--label", LAZYGIT_TAB,
-                   "--no-focus"]
-            if cwd:
-                tab += ["--cwd", cwd]
-            before, _ = panes_of(ws_id)
-            lazygit = new_pane_after(ws_id, before, lambda: herdr(*tab))
-            if not lazygit:
-                log(f"  ! {LAZYGIT_TAB} tab creation failed or new pane not found")
-
     # ── Focus before the waiting starts, so the layout settles visibly ──
     # `pane focus` moves relative to a pane, so to land on the left pane ask the
     # right one for its left neighbour. Always explicit ids, never --current:
@@ -368,10 +344,6 @@ def arrange(ws):
         focus_result = herdr("pane", "focus", "--pane", right, "--direction", "left")
     elif FOCUS == "right" and right:
         focus_result = herdr("pane", "focus", "--pane", left, "--direction", DIRECTION)
-    elif FOCUS == "lazygit" and lazygit:
-        _, tabs = panes_of(ws_id)
-        lg_tab = tabs.get(lazygit)
-        focus_result = herdr("tab", "focus", lg_tab) if lg_tab else None
     else:
         focus_result = "skipped"
     if focus_result is None:
@@ -383,8 +355,6 @@ def arrange(ws):
     run_in_pane(left, LEFT_CMD, "left pane")
     if right:
         run_in_pane(right, RIGHT_CMD, "right pane")
-    if lazygit:
-        run_in_pane(lazygit, LAZYGIT_CMD, f"{LAZYGIT_TAB} tab")
 
 
 def handle(event, seen):

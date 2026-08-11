@@ -45,19 +45,10 @@ grep -q '!! lazygit install failed' "$INST" \
   && pass "lazygit install failure warns instead of aborting" \
   || fail "lazygit install failure warns instead of aborting"
 
-# ── Ordering: lazygit before the auto-layout daemon ──────────
-# The daemon enabled at the end of install.sh runs lazygit in every new
-# worktree's second tab; installing it afterwards leaves a fresh machine with a
-# tab that dies on launch. Anchor on the gate itself (not the helper
-# definitions above it) — that's the line whose position actually determines
-# when the install happens.
-lg_line="$(grep -n 'if ! lazygit_meets_floor' "$INST" | head -1 | cut -d: -f1)"
-al_line="$(grep -n 'herdr-autolayout.service' "$INST" | head -1 | cut -d: -f1)"
-if [ -n "$lg_line" ] && [ -n "$al_line" ] && [ "$lg_line" -lt "$al_line" ]; then
-  pass "lazygit is installed before the auto-layout daemon is enabled"
-else
-  fail "lazygit is installed before the auto-layout daemon is enabled (lazygit@${lg_line:-?} autolayout@${al_line:-?})"
-fi
+# No ordering assertion against the auto-layout daemon: it used to open a
+# lazygit tab in every new worktree, which made "install the binary first" a
+# real constraint. Nothing starts lazygit for you now, so where in install.sh
+# it lands carries no meaning.
 
 bash -n "$INST" && pass "install.sh parses" || fail "install.sh parses"
 

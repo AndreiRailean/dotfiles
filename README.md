@@ -341,11 +341,9 @@ Every new git-worktree workspace gets the same treatment automatically:
 ┌────────────────┬────────────────┐   tab 1: "claude"
 │ claude         │ plain shell    │   left pane focused
 └────────────────┴────────────────┘
-tab 2: "lazygit"
 ```
 
-`install.sh` installs lazygit itself, so the tab has a binary behind it on a
-fresh machine; set `HERDR_AUTOLAYOUT_LAZYGIT_CMD=` to skip the tab entirely.
+One tab, split in two. Nothing else is opened.
 
 herdr has **no declarative hook** for this — there's no `on_worktree_create` in
 `config.toml`, and `herdr integration` only manages agent integrations. So
@@ -355,9 +353,9 @@ fires however the worktree was created (TUI, CLI, or API).
 
 **Or apply it by hand: `prefix+shift+L`.** Same code path, for a workspace that
 predates the daemon or one you've since rearranged. It's idempotent — the split
-only happens when the tab has one pane, an existing lazygit tab is reused, and a
-command is only sent if it isn't already running — so pressing it twice is a
-no-op. Two entry points, one implementation:
+only happens when the tab has one pane, and a command is only sent if it isn't
+already running — so pressing it twice is a no-op. Two entry points, one
+implementation:
 
     herdr-autolayout                  # daemon: arrange every new worktree
     herdr-autolayout arrange [WS_ID]  # arrange one workspace now
@@ -391,18 +389,16 @@ herdr-autolayout`) — `HERDR_AUTOLAYOUT_` plus:
 | --- | --- |
 | `LEFT_CMD` | left pane command (default `claude`; empty = plain shell) |
 | `RIGHT_CMD` | right pane command (default: none, just a shell) |
-| `LAZYGIT_CMD` | lazygit tab command (empty skips the tab entirely) |
 | `MAIN_TAB` | first tab's label (default `claude`; empty keeps herdr's number) |
-| `LAZYGIT_TAB` | lazygit tab's label (default `lazygit`) |
-| `FOCUS` | `left` (default) / `right` / `lazygit` / `none` |
+| `FOCUS` | `left` (default) / `right` / `none` |
 | `DIRECTION` | `right` (default) / `down` |
 | `RATIO` | split ratio, e.g. `0.5` |
 | `READY_SECS` | how long to wait for a shell prompt (default 90) |
 
 Four things worth knowing before touching it:
 
-- **Typing into a pane is the hard part.** Neither `pane split` nor
-  `tab create` takes a `--command`, so commands are typed with
+- **Typing into a pane is the hard part.** `pane split` doesn't take a
+  `--command`, so commands are typed with
   `pane send-text` — and text sent before the shell reaches its prompt is
   echoed to the screen then discarded. Shell init here takes ~5s, so this bites
   every time. `fg == shell_pid` does *not* mean ready (bash is its own
