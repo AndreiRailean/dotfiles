@@ -45,6 +45,16 @@ assert_contains "$out" 'record-decision' "payload without a trailing newline sti
 out="$(printf 'noise\n\nmore noise git commit here\n' | sh "$PROBE" commit)"
 assert_contains "$out" 'record-decision' "a blank line mid-payload does not truncate"
 
+# tool_response carries command OUTPUT. A cat, grep or sed of any file that
+# mentions the phrase must not fire the probe — this repo's own plan, spec and
+# ADRs all contain it, so the false-positive rate here would be high.
+out="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"cat README.md"},"tool_response":{"stdout":"run git commit to save your work"}}' | sh "$PROBE" commit)"
+assert_eq "$out" "" "output mentioning git commit does not fire the probe"
+
+# The command half still matches.
+out="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"tool_response":{"stdout":"[main abc] x"}}' | sh "$PROBE" commit)"
+assert_contains "$out" 'record-decision' "a real commit still fires the probe"
+
 # ── never disruptive ──────────────────────────────────────────
 # Unknown mode, empty stdin, garbage stdin: all silent, all exit 0.
 printf '' | sh "$PROBE" commit >/dev/null 2>&1
@@ -66,12 +76,24 @@ assert_eq "$out" "" "subagent mode no longer emits anything"
 SETTINGS="$REPO/claude/.claude/settings.json"
 cfg="$(cat "$SETTINGS")"
 assert_contains "$cfg" '"PostToolUse"' "settings.json registers PostToolUse"
-assert_contains "$cfg" 'adr-probe.sh commit' "PostToolUse calls the probe in commit mode"
+# The guard (below) wraps the path in quotes for correctness against a
+# $HOME containing spaces. cat reads the raw JSON text, where JSON escapes
+# every " as \" — so the substring right after the path is \" commit, not a
+# bare space. Match what's actually on disk, not the pre-escaping shell text.
+assert_contains "$cfg" 'adr-probe.sh\" commit' "PostToolUse calls the probe in commit mode"
 assert_contains "$cfg" '"matcher": "Bash"' "PostToolUse matches the Bash tool"
 assert_not_contains "$cfg" 'SubagentStop' "settings.json no longer registers SubagentStop"
 
 # The path in settings.json must be the one stow creates.
 assert_contains "$cfg" '$HOME/.claude/hooks/adr-probe.sh' "hook path matches the stow target"
+
+# A settings.json arrives via git pull; the script arrives via stow. Between
+# those, an unguarded command exits 2 — a BLOCKING PostToolUse error on every
+# Bash call, including the ones needed to run install.sh.
+#
+# cfg is the raw JSON text (via cat), where JSON escapes every " as \" — so
+# the guard's quotes show up escaped here, not bare.
+assert_contains "$cfg" '[ -r \"$HOME/.claude/hooks/adr-probe.sh\" ]' "hook is guarded against a missing script"
 
 # Valid JSON, or Claude Code silently ignores the whole settings file.
 # Guarded: python3 is not guaranteed on macOS, and an absent interpreter must

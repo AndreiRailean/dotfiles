@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh $HOME/.claude/hooks/adr-probe.sh commit"
+            "command": "[ -r \"$HOME/.claude/hooks/adr-probe.sh\" ] && sh \"$HOME/.claude/hooks/adr-probe.sh\" commit || exit 0"
           }
         ]
       }

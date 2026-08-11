@@ -36,7 +36,15 @@ case "$mode" in
   commit)
     # Matchers match the tool NAME, not the command text, so this fires on
     # every Bash call and has to filter here.
-    case "$payload" in
+    #
+    # Match only the command half of the payload. tool_response carries command
+    # OUTPUT, and any cat/grep/sed of a file mentioning the phrase would
+    # otherwise fire the probe — measured at six false positives in one session
+    # before this guard. Relies on tool_input preceding tool_response in the
+    # payload, which it does; if that ever changed the effect is a missed
+    # capture, not a false one.
+    head="${payload%%\"tool_response\"*}"
+    case "$head" in
       *'git commit'*) ;;
       *) exit 0 ;;
     esac
