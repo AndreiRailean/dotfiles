@@ -48,7 +48,7 @@ If the concept you need isn't in the glossary yet, that's a signal — either yo
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+> _Contradicts [20260809-one-record-type-status-lifecycle](../adr/20260809-one-record-type-status-lifecycle.md) — but worth reopening because…_
 
 ## Writing ADRs
 
@@ -90,6 +90,9 @@ the time — but that is a choice, not a step in adopting the convention.
 `type`, `status`, `date` and `summary` are required. `supersedes` and
 `superseded_by` hold a filename **stem** exactly.
 
+`type` is always `ADR`. There is one record type; the status field carries the
+lifecycle.
+
 ```yaml
 ---
 type: ADR
@@ -127,6 +130,9 @@ specifically enough to recognise a re-attempt; how it failed, with numbers
 where they exist; and what would make it viable — or an explicit "nothing,
 this is structural". The last distinguishes *don't do this* from *don't do
 this yet*.
+
+The H1 is a short title carrying no identifier. The ID is the filename and the
+frontmatter; repeating it in the title only goes stale on rename.
 
 Length is whatever the reasoning requires. The minimum is a title,
 frontmatter, and a paragraph.

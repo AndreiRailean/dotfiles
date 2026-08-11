@@ -20,7 +20,10 @@ done
 assert_contains "$d" "overrides" "domain.md states it overrides bundled templates"
 
 # The old sequential convention must be gone, or agents keep reading it.
-assert_not_contains "$d" "0001-event-sourced-orders.md" "old sequential example removed"
+assert_not_contains "$d" "0001-event-sourced-orders.md" "old sequential example filename removed"
+# The filename check alone let "ADR-0007" survive in the conflict-flagging
+# example. Identifiers are the thing that must not use the abolished form.
+assert_not_contains "$d" "ADR-00" "no sequential ADR identifiers remain"
 
 # ── every record conforms ─────────────────────────────────────
 # Applies to the whole directory rather than a list, so records added later are
