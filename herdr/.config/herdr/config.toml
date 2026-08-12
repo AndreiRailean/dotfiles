@@ -1,5 +1,24 @@
 # herdr configuration — managed by dotfiles.
 #
+# ┌─ PREFIX ONLY APPLIES TO A LOCAL ATTACH ───────────────────────────────────┐
+# │ `[keys]` below sets the prefix only when herdr runs on this machine.      │
+# │                                                                           │
+# │ `herdr --remote <host>` defaults to `--remote-keybindings local`, which   │
+# │ takes the keymap from the CLIENT's config.toml — it serializes its own    │
+# │ keys profile and ships it over the wire, so this file is bypassed.        │
+# │ Attaching from a machine without these dotfiles therefore falls back to   │
+# │ herdr's built-in ctrl+b, and prefix+shift+L below never fires.            │
+# │                                                                           │
+# │ Attach one of two ways:                                                   │
+# │                                                                           │
+# │   herdr --remote <host> --remote-keybindings server  # uses this file     │
+# │   herdr --remote <host>                              # needs dotfiles     │
+# │                                                      # on the client      │
+# │                                                                           │
+# │ Prefer `server`: prefix+shift+L below runs herdr-autolayout, which only   │
+# │ exists on the server side.                                                │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
 # ┌─ RETEST AFTER A herdr UPGRADE ────────────────────────────────────────────┐
 # │ Last verified against: herdr 0.7.5                                        │
 # │                                                                           │
