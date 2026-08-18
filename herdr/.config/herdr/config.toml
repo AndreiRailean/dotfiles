@@ -39,6 +39,20 @@ onboarding = false
 [theme]
 name = "tokyo-night"
 
+# tokyo-night's stock `surface_dim` is only a shade off the panel background, so
+# the selected space/agent in the sidebar is very hard to pick out — every agent
+# row is bold, and the highlight was the only thing setting the current one
+# apart. herdr 0.8.0 has no selection-specific style setting (the only levers are
+# these 16 theme tokens, `ui.accent`, and the sidebar row templates, none of
+# which can style "the selected row" on its own), so raising this token's
+# contrast is the fix.
+#
+# `surface_dim` also paints the sidebar's outer border and the spaces/agents
+# divider, so it has to work as a thin line as well as a fill — hence a mid-tone
+# blue from the tokyo-night palette rather than something saturated.
+[theme.custom]
+surface_dim = "#33467c"
+
 [keys]
 # Match the tmux prefix (Ctrl-a) for muscle memory. Everything else keeps
 # herdr's default keymap (pane nav prefix+h/j/k/l, splits prefix+v / prefix+-).
