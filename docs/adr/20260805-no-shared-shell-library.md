@@ -1,6 +1,13 @@
-# ADR-0001 — No shared shell library (yet) between install.sh and doctor.sh
+---
+type: ADR
+status: accepted
+date: 2026-08-05
+summary: install.sh and doctor.sh duplicate logic deliberately, enforced by a
+  sync test rather than by comments, because a third consumer (drift.sh) is
+  POSIX sh and cannot source a bash library.
+---
 
-**Status:** accepted · **Date:** 2026-08-05
+# No shared shell library (yet) between install.sh and doctor.sh
 
 ## Context
 

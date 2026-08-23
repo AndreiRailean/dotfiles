@@ -9,7 +9,7 @@
 # never stowed, or a floor check that passes in one script and fails in the
 # other. It has already cost a real bug — install.sh derived the repo root with
 # `pwd` while doctor.sh used `pwd -P`, which made link pruning a silent no-op
-# whenever ~/dotfiles was itself a symlink (see docs/adr/0001).
+# whenever ~/dotfiles was itself a symlink (see docs/adr/20260805-no-shared-shell-library.md).
 #
 # So each assertion below is a copy-pair that must stay in step. Every failure
 # here is also a reason to reach for the extraction described in that ADR:
@@ -99,7 +99,7 @@ assert_contains "$(cat "$DOC")" '.pre-dotfiles.' \
   "doctor.sh still skips the .pre-dotfiles.* backup (consumer)"
 
 # ── The ADR that explains all of the above ────────────────────
-ADR="$REPO/docs/adr/0001-no-shared-shell-library.md"
+ADR="$REPO/docs/adr/20260805-no-shared-shell-library.md"
 [ -f "$ADR" ] && pass "the ADR recording this decision exists" \
   || fail "the ADR recording this decision exists ($ADR)"
 
