@@ -86,6 +86,17 @@ is not tracked and cannot be. The installer is the only path to every machine.
 This is a real gap, narrowed only by the fact that a fresh clone has nothing
 machine-specific in it yet.
 
+`.github/workflows/tests.yml` is the backstop for that gap, running the suite
+on every pull request and every push to `master` — including from a clone, a CI
+agent, or the GitHub web UI, none of which have the hook.
+
+It does not close the gap, and the distinction matters: **the hook prevents, CI
+detects.** The hook stops a leak leaving the machine. CI only runs once commits
+have reached GitHub, and on a public repo content that reaches `origin` is
+already public whether or not the run then goes red. So for the disclosure case
+the hook remains the only preventive control, and CI is what catches the
+machines where it was never installed. Neither makes the other redundant.
+
 The project-local file is shared across that project's worktrees with
 `git worktree-share`, so permission rules Claude learns in one worktree apply
 in all of them. For a single project that is usually wanted, and it matches

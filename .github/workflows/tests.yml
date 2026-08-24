@@ -1,0 +1,64 @@
+# Runs the repo's own test suite on GitHub, for the one thing a pre-push hook
+# structurally cannot cover: a machine where `install.sh` has never run.
+#
+# The guard in tests/test-claude-settings-scope.sh is installed as a pre-push
+# hook by install.sh. That reaches every machine that has been set up — but
+# .git/hooks is untracked and cannot be tracked, so a fresh clone, a CI agent,
+# or an edit made in the GitHub web UI pushes with no guard at all. That gap is
+# recorded in docs/adr/20260824-claude-settings-scope.md; this workflow is the
+# backstop for it.
+#
+# Note what this does and does not do. The hook PREVENTS a leak leaving the
+# machine; this only DETECTS one after it reaches GitHub, and on a public repo
+# content that reaches origin is already public even if the run then goes red.
+# So this does not replace the hook, and the hook does not make this redundant.
+#
+# Scope is deliberately the static suite only, and every test file here is
+# static: they read repo files and never execute install.sh. Doing that needs a
+# throwaway $HOME, an idempotency check (run twice, diff the tree), and the
+# consuming tools present to parse their own configs — separate work, not yet
+# specced.
+#
+# Two limits are worth knowing before anyone extends this. A Linux runner is not
+# WSL, and this repo branches on IS_WSL for the clipboard bridge and reaches
+# 1Password through the Windows binary, so the environment it is mainly used on
+# stays untested here. And nothing about a runner can verify the part of a
+# dotfiles repo that is experiential — prompt, statusline, fonts, keybindings —
+# which is doctor.sh's job on a real machine, not this file's.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Least privilege: the suite only reads the checkout.
+permissions:
+  contents: read
+
+# A new push to the same ref makes an in-flight run obsolete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # jq is the suite's ONLY external dependency — verified by running
+      # tests/run.sh under `env -i` with a minimal PATH: 12 of 14 test files
+      # pass with nothing but coreutils, and both failures are jq's absence.
+      #
+      # ubuntu-latest already ships jq, but installing it explicitly keeps the
+      # dependency stated here rather than inherited from a runner image that
+      # can change under us.
+      - name: Install jq
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      # No `env -i` here: the point of CI is a machine that was never set up,
+      # which the runner already is. The suite is static — it reads repo files
+      # and never touches $HOME — so a bare runner is the environment it wants.
+      - name: Run test suite
+        run: sh tests/run.sh
