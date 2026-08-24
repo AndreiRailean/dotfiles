@@ -466,6 +466,44 @@ else
   echo "   ~/.config/herdr/scripts/herdr-autolayout &"
 fi
 
+# ── Repo-side pre-push guard ─────────────────────────────────
+# Unlike everything above, this touches the CLONE rather than $HOME.
+# claude/.claude/settings.json is the one tracked file that Claude Code itself
+# writes to (see clear_stow_conflicts), and this repo is public — so a session
+# can append organisational detail to a public repo with no human in the loop.
+# tests/test-claude-settings-scope.sh detects that; this hook is what makes it
+# unmissable, by running it before anything leaves the machine.
+#
+# .git/hooks is not tracked by git, so a fresh clone starts with no hooks at
+# all — installing it here is the only way it reaches every machine. Guarded by
+# a marker so re-runs don't stack copies, and skipped when .git is absent (a
+# tarball download rather than a clone).
+HOOK_MARKER="# >>> dotfiles settings-scope guard >>>"
+if [ -d "$DOTFILES_DIR/.git" ]; then
+  hook="$DOTFILES_DIR/.git/hooks/pre-push"
+  if [ -f "$hook" ] && grep -qF "$HOOK_MARKER" "$hook"; then
+    : # already installed
+  else
+    mkdir -p "$(dirname "$hook")"
+    # Append rather than overwrite: a machine may already have its own hook.
+    # A fresh file needs the shebang; an existing one already has one.
+    [ -s "$hook" ] || printf '#!/bin/sh\n' >"$hook"
+    {
+      printf '\n%s\n' "$HOOK_MARKER"
+      printf '%s\n' 'if ! sh "$(git rev-parse --show-toplevel)/tests/test-claude-settings-scope.sh"; then'
+      printf '%s\n' '  echo "" >&2'
+      printf '%s\n' '  echo "push blocked: claude/.claude/settings.json holds machine- or org-specific" >&2'
+      printf '%s\n' '  echo "content, and this repo is public. Move it into the relevant project as" >&2'
+      printf '%s\n' '  echo ".claude/settings.local.json (gitignored). Override once with --no-verify." >&2'
+      printf '%s\n' '  exit 1'
+      printf '%s\n' 'fi'
+      printf '%s\n' "# <<< dotfiles settings-scope guard <<<"
+    } >>"$hook"
+    chmod +x "$hook"
+    echo "Installed pre-push settings-scope guard in .git/hooks/pre-push"
+  fi
+fi
+
 # ── Drift check ──────────────────────────────────────────────
 # Surface any config that lives next to managed files but isn't tracked
 # (see doctor.sh). Report-only; never blocks the install.
