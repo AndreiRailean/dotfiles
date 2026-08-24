@@ -45,7 +45,7 @@ jobs:
   suite:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # jq is the suite's ONLY external dependency — verified by running
       # tests/run.sh under `env -i` with a minimal PATH: 12 of 14 test files
