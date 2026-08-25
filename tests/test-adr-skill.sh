@@ -34,4 +34,13 @@ done
 # Redaction: rejection records quote error output, which quotes credentials.
 assert_contains "$body" "Redact" "body requires redaction"
 
+# The skill defers to a repo's domain.md on record CONTENT, but not on the
+# filename. Ceding the filename too is what let ratpack-sell keep minting
+# sequential numbers until two records collided on 0019: a stale domain.md
+# silently disabled the convention. The carve-out has to stay explicit.
+assert_contains "$body" "The filename convention is not one of those" \
+  "skill carves the filename out of domain.md's precedence"
+assert_contains "$body" "whatever a repo doc or a bundled plugin template says" \
+  "skill names the plugin template as also overridden"
+
 finish

@@ -35,9 +35,18 @@ approach someone actually spent effort on.
 
 ## Where records go
 
-Read `docs/agents/domain.md` first — it is the repo's format contract and
-overrides anything here if the two disagree. It also says whether the repo is
-single- or multi-context, and therefore which `docs/adr/` applies.
+Read `docs/agents/domain.md` first — it says whether the repo is single- or
+multi-context, and therefore which `docs/adr/` applies. Where it and this skill
+disagree on the *content* of a record — sections, length, what clears the bar —
+domain.md wins. It is the repo's contract, and it is what a collaborator
+without this skill will read.
+
+**The filename convention is not one of those.** New records are date-stemmed
+`YYYYMMDD-slug.md` whatever a repo doc or a bundled plugin template says.
+Sequential numbering fails in exactly the case that matters — two agents, two
+worktrees, one afternoon — and a repo whose domain.md still documents `0001-`
+is describing that problem, not consenting to it. Follow the date-stem and fix
+domain.md in the same change.
 
 If `docs/agents/domain.md` has no ADR section, create `docs/adr/` and seed the
 section using the format below, so the repo becomes self-describing to agents
