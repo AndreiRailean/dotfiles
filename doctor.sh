@@ -69,6 +69,38 @@ if [ "$ADOPT" -eq 0 ] && command -v lazygit >/dev/null 2>&1; then
   fi
 fi
 
+# ── Hook registrations resolve (report-only; never affects drift) ───
+# Every hook in the stow-managed settings.json is guarded so a missing script
+# is a no-op rather than a blocking error — see
+# docs/adr/20260811-stow-managed-hook-activation.md for why that guard has to
+# be there. The cost of the guard is that a permanently broken registration
+# looks exactly like a working one that has nothing to say: no error, no
+# output, the probe simply never fires again.
+#
+# The symlink scan below cannot catch this. It walks repo file -> $HOME, so it
+# only knows about scripts that still exist in the repo. A registration
+# pointing at a renamed, deleted or mistyped script corresponds to no repo file
+# at all, so nothing ever looks for it.
+if [ "$ADOPT" -eq 0 ] && [ -r claude/.claude/settings.json ]; then
+  # Pull $HOME-relative hook script paths out of the registered commands.
+  # Deliberately literal: these are paths this repo wrote, not arbitrary shell.
+  while IFS= read -r hookpath; do
+    [ -n "$hookpath" ] || continue
+    [ -r "$HOME/$hookpath" ] && continue
+    echo "▲ settings.json registers a hook whose script is not on this machine:"
+    echo "    \$HOME/$hookpath"
+    if [ -f "claude/$hookpath" ]; then
+      echo "    The script is in the repo but not stowed, so the hook is silently inert."
+      echo "    fix: re-run ./install.sh"
+    else
+      echo "    No such script in the repo either — the registration is stale."
+      echo "    fix: remove it from claude/.claude/settings.json, or restore the script"
+    fi
+    echo
+  done < <(grep -o '\$HOME/[.]claude/hooks/[A-Za-z0-9_-]*\.sh' claude/.claude/settings.json \
+             | sed 's|^\$HOME/||' | sort -u)
+fi
+
 untracked=()   # "target|pkg|rel"
 broken=()      # dangling symlinks
 missing=()     # repo files not linked into $HOME
