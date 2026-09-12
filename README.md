@@ -52,9 +52,10 @@ Everything is XDG-based (`~/.config`, `~/.local/share`, …).
 
 The `claude` package deploys global agent conventions (e.g. Conventional
 Commits) to `~/.claude/CLAUDE.md`, which Claude Code reads for **every** project
-on the machine, plus the global `settings.json` and the status-line script.
-Only those three files are symlinked into `~/.claude`; the rest of that
-directory (state, sessions, history) is left alone.
+on the machine, plus the global `settings.json`, the status-line script, the
+hooks it registers, and the skills under `skills/`. Only those paths are
+symlinked into `~/.claude`; the rest of that directory (state, sessions,
+history) is left alone.
 
 Not to be confused with this repo's own root `CLAUDE.md`, which is not stowed
 anywhere. Claude Code doesn't read `AGENTS.md` — as of 2.1.269 the only place
