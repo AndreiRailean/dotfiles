@@ -56,6 +56,14 @@ on the machine, plus the global `settings.json` and the status-line script.
 Only those three files are symlinked into `~/.claude`; the rest of that
 directory (state, sessions, history) is left alone.
 
+Not to be confused with this repo's own root `CLAUDE.md`, which is not stowed
+anywhere. Claude Code doesn't read `AGENTS.md` — as of 2.1.269 the only place
+the CLI mentions that filename is the `/import` path that migrates a Codex
+project *into* a `CLAUDE.md` — so the root file exists purely to `@AGENTS.md`
+it back in for sessions working **in this repo**. Both files stay pointers;
+the rules live in skills and `docs/agents/`, per
+[docs/adr/20260809-rules-in-skill-body.md](docs/adr/20260809-rules-in-skill-body.md).
+
 `settings.json` is the live file Claude Code reads **and writes** — it rewrites
 it whenever you change a setting via `/config`, toggle a plugin, or accept a
 permission dialog. Claude writes *through* the symlink, so those edits land in
