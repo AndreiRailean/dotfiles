@@ -7,6 +7,16 @@
     "defaultMode": "auto"
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -r \"$HOME/.claude/hooks/agents-md-probe.sh\" ] && sh \"$HOME/.claude/hooks/agents-md-probe.sh\" || exit 0"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
