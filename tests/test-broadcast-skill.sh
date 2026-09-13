@@ -47,6 +47,13 @@ assert_contains "$body" "When in doubt, send" "body biases toward over-including
 assert_contains "$body" "git branch -r" "body says how to check a peer could have the SHA"
 assert_contains "$body" "one false negative" "body names the stale-clone exclusion"
 
+# A test on a message that already has an addressee is ritual, and rituals get
+# deleted — with the load-bearing one next to them. Half of four control reps
+# attached it to a reply anyway, one as an outright gate, before this was said.
+assert_contains "$body" "scopes action, not correspondence" \
+  "body bounds the protocol to unaddressed messages"
+assert_contains "$body" "A reply has an addressee" "body says why a reply needs no test"
+
 # The finding is that the detector cannot exist. A skill that ends up
 # recommending one has inverted its own conclusion.
 assert_contains "$body" "The detector cannot exist" "body forbids building a detector"

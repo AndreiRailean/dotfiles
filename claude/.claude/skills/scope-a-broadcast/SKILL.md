@@ -57,6 +57,21 @@ Discarding costs nothing and needs no reply. If the sender is waiting on you,
 send one line with the failing command and stop — do not open a negotiation
 about whether it was meant for you.
 
+## The test scopes action, not correspondence
+
+A reply has an addressee. It goes to whoever wrote to you, and "was this meant
+for me" is already answered by the fact that you were written to — so a reply
+carries no test, however stateful it is. A broadcast has no addressee, which is
+the only reason the test exists at all.
+
+Name a SHA in a reply where it anchors something the reader will look up; do
+not attach the test to it. Asking a session that has just told you it is in the
+repo to prove it is in the repo is ritual, and a ritual test gets read as noise,
+then ignored, then deleted — taking the real one with it.
+
+The ordering rule is not an exception: a reply that carries steps still puts
+what they are against above them.
+
 ## Why a SHA and not an identity
 
 Naming a SHA does not identify the recipient. **It tests capability, and only
