@@ -39,9 +39,14 @@ branch instead.
 A SHA only you can resolve excludes everyone, which is the expensive direction.
 It is also the protocol's one false negative: a separate clone that has not
 fetched since you pushed will fail the test correctly and be excluded wrongly.
-Sibling worktrees share the object store and never have this problem; when the
-peers are separate clones, prefer a SHA that has been on the default branch
-long enough for them to have it.
+Sibling worktrees share the object store and never have this problem.
+
+You cannot know when another clone last fetched, so do not try to pick a SHA
+old enough to be safe. When the work you are announcing is recent and a peer
+might be a separate clone, name a second, older SHA from the same repo and say
+that either one resolving is enough. Any commit that has been on the default
+branch for a while does the job — it is one they have if they have the repo at
+all, and it costs the recipient the same single command.
 
 ## Receiving: one command
 

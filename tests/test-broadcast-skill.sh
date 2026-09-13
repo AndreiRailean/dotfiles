@@ -47,6 +47,12 @@ assert_contains "$body" "When in doubt, send" "body biases toward over-including
 assert_contains "$body" "git branch -r" "body says how to check a peer could have the SHA"
 assert_contains "$body" "one false negative" "body names the stale-clone exclusion"
 
+# "Prefer a SHA old enough for peers to have it" asked the sender to know when
+# other clones last fetched, which it cannot. One control rep invented the
+# two-SHA fallback to cope and another restated the hazard; neither could
+# follow the line as written.
+assert_contains "$body" "name a second, older SHA" "body gives a decidable fallback for a fresh SHA"
+
 # A test on a message that already has an addressee is ritual, and rituals get
 # deleted — with the load-bearing one next to them. Half of four control reps
 # attached it to a reply anyway, one as an outright gate, before this was said.
