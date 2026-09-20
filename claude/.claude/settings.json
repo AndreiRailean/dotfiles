@@ -24,6 +24,10 @@
           {
             "type": "command",
             "command": "[ -r \"$HOME/.claude/hooks/adr-probe.sh\" ] && sh \"$HOME/.claude/hooks/adr-probe.sh\" commit || exit 0"
+          },
+          {
+            "type": "command",
+            "command": "[ -r \"$HOME/.claude/hooks/ff-probe.sh\" ] && sh \"$HOME/.claude/hooks/ff-probe.sh\" merge || exit 0"
           }
         ]
       }
