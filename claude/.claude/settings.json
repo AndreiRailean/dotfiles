@@ -13,6 +13,10 @@
           {
             "type": "command",
             "command": "[ -r \"$HOME/.claude/hooks/agents-md-probe.sh\" ] && sh \"$HOME/.claude/hooks/agents-md-probe.sh\" || exit 0"
+          },
+          {
+            "type": "command",
+            "command": "[ -r \"$HOME/.claude/hooks/behind-probe.sh\" ] && sh \"$HOME/.claude/hooks/behind-probe.sh\" || exit 0"
           }
         ]
       }
