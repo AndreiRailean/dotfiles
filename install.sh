@@ -13,6 +13,12 @@ cd "$DOTFILES_DIR"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
+# ~/.local/bin is where several installers below drop binaries, and nothing
+# else creates it on a fresh Mac. Starship's installer refuses a -b dir that
+# doesn't exist ("does not appear to be a directory") rather than creating it,
+# and path.sh only puts the dir on PATH if it exists at shell startup.
+mkdir -p "$HOME/.local/bin"
+
 # ── OS / environment detection ───────────────────────────────
 OS="$(uname -s)"
 IS_WSL=0
@@ -164,10 +170,18 @@ done
 # ── Wire the shell entrypoint into each shell's rc ───────────
 # Keeps the distro-provided rc and its defaults; just appends one guarded
 # line that sources our managed init.sh. Idempotent via a marker.
+#
+# An absent rc is skipped — unless it belongs to the login shell. macOS ships
+# no ~/.zshrc, so skipping it there would leave the whole shell package inert
+# on a fresh Mac (no aliases, no PATH, no prompt); the append creates it.
 wire_shell_rc() {
-  local rc="$1" marker="# >>> dotfiles (managed) >>>"
-  [ -e "$rc" ] || return 0
-  if ! grep -qF "$marker" "$rc"; then
+  local rc="$1" marker="# >>> dotfiles (managed) >>>" login_rc=""
+  case "${SHELL##*/}" in
+    zsh)  login_rc="$HOME/.zshrc" ;;
+    bash) login_rc="$HOME/.bashrc" ;;
+  esac
+  [ -e "$rc" ] || [ "$rc" = "$login_rc" ] || return 0
+  if ! grep -qF "$marker" "$rc" 2>/dev/null; then
     {
       printf '\n%s\n' "$marker"
       printf '%s\n' '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/init.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/init.sh"'
@@ -269,6 +283,29 @@ if command -v update-alternatives &>/dev/null && command -v nvim &>/dev/null; th
   done
 fi
 
+# ── Editor links (no update-alternatives, i.e. macOS) ────────
+# macOS's /usr/bin/vim is classic vim on the sealed system volume, so it can't
+# be repointed the Debian way above. ~/.local/bin precedes /usr/bin on PATH
+# (path.sh), so vim/vi links there reach scripts too (doctor.sh included), not
+# just the interactive shells aliases.sh covers. A real file at either name is the
+# user's own and is left alone; an existing link is refreshed so it follows
+# nvim if its install location moves.
+link_vim_to_nvim() {
+  local nvim_path name dest
+  nvim_path="$(command -v nvim)" || return 0
+  for name in vim vi; do
+    dest="$HOME/.local/bin/$name"
+    if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+      echo "!! $dest is a real file, not linking it to nvim"
+      continue
+    fi
+    ln -sfn "$nvim_path" "$dest"
+  done
+}
+if ! command -v update-alternatives &>/dev/null; then
+  link_vim_to_nvim
+fi
+
 # ── 1Password CLI (op) ───────────────────────────────────────
 # Not in distro repos; use 1Password's own channels. See
 # https://developer.1password.com/docs/cli/get-started/
@@ -303,6 +340,20 @@ if ! command -v op &>/dev/null; then
     fi
   else
     echo "!! Install 1Password CLI manually: https://developer.1password.com/docs/cli/get-started/"
+  fi
+fi
+
+# ── Ghostty (terminal, macOS only) ───────────────────────────
+# A GUI app, so it comes from a Homebrew cask, not pkg_install. Checked by the
+# app bundle rather than PATH: the cask doesn't put `ghostty` on PATH, and an
+# app installed from the DMG instead of brew should count as installed too.
+if [ "$OS" = "Darwin" ] && [ ! -d /Applications/Ghostty.app ]; then
+  if command -v brew &>/dev/null; then
+    echo "Installing Ghostty..."
+    brew install --cask ghostty \
+      || echo "!! Ghostty install failed — download it from https://ghostty.org/download"
+  else
+    echo "!! Install Ghostty manually: https://ghostty.org/download"
   fi
 fi
 

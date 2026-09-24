@@ -19,12 +19,13 @@ Then restart your shell (or `exec "$SHELL"`).
 
 1. Install GNU Stow if missing (brew / apt / pacman).
 2. Symlink every package into `$HOME` with `stow --no-folding`.
-3. Append a one-line loader to `~/.bashrc` / `~/.zshrc` (if they exist),
+3. Append a one-line loader to `~/.bashrc` / `~/.zshrc` (if they exist; the
+   login shell's rc is created if missing, e.g. `~/.zshrc` on a fresh Mac),
    sourcing the managed shell entrypoint. Your distro rc and its defaults are
    left intact.
 4. Seed the per-machine files (`~/.config/git/local`, `~/.config/shell/local.sh`)
    from their `*.example` templates — never overwriting an existing one.
-5. Best-effort install Starship, a Nerd Font, and (on WSL) `win32yank` for
+5. Best-effort install Starship, a Nerd Font, Ghostty (macOS), and (on WSL) `win32yank` for
    clipboard bridging. Terminal font selection is a manual step it prints.
 
 ## Layout
