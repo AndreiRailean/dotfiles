@@ -197,6 +197,30 @@ wire_shell_rc "$HOME/.zshrc"
 [ -f "$HOME/.config/git/local" ]  || { cp "$DOTFILES_DIR/git/.config/git/local.example"       "$HOME/.config/git/local";  echo "Created ~/.config/git/local — set your name/email"; }
 [ -f "$HOME/.config/shell/local.sh" ] || { cp "$DOTFILES_DIR/shell/.config/shell/local.sh.example" "$HOME/.config/shell/local.sh"; echo "Created ~/.config/shell/local.sh"; }
 
+# ── Give `git config --global` somewhere that isn't the repo ─
+# `git config --global` writes to ~/.gitconfig, falling back to
+# ~/.config/git/config ONLY when ~/.gitconfig doesn't exist — and that file is a
+# symlink into this (public) repo. So on a machine without ~/.gitconfig, every
+# tool that configures git for you writes into the tracked config. Real case:
+# 1Password's "set up SSH commit signing" added a macOS-only op-ssh-sign path
+# there, which would have broken committing on every Linux/WSL machine.
+#
+# An existing ~/.gitconfig catches those writes instead. git reads it AFTER the
+# XDG file, so whatever lands in it overrides the shared defaults, the same way
+# the [include]d ~/.config/git/local does. Never overwritten.
+seed_global_gitconfig() {
+  [ -e "$HOME/.gitconfig" ] && return 0
+  cat >"$HOME/.gitconfig" <<'EOF'
+# Machine-local git config, written by tools via `git config --global`.
+#
+# It exists so those writes land here rather than in ~/.config/git/config,
+# which is tracked in the dotfiles repo. Hand-written per-machine settings
+# (identity, signing) go in ~/.config/git/local; either file is fine.
+EOF
+  echo "Created ~/.gitconfig — catches 'git config --global' writes outside the repo"
+}
+seed_global_gitconfig
+
 if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
   echo "Installing win32yank for clipboard bridge..."
   if curl -fsSLo /tmp/win32yank.zip \
@@ -367,13 +391,59 @@ if ! command -v starship &>/dev/null; then
 fi
 
 # ── herdr (agent-aware terminal multiplexer) ─────────────────
-# Static, self-updating binary (`herdr update`); not in distro repos. The
-# official installer covers Linux + macOS and drops it in ~/.local/bin. On
-# macOS you can alternatively `brew install herdr` (see https://herdr.dev).
+# Static, self-updating binary (`herdr update`); not in distro repos. On macOS
+# with Homebrew it comes from brew, which also ships a launchd service for the
+# server (started further down). Elsewhere the official installer drops it in
+# ~/.local/bin.
+HERDR_BREW=0
+if [ "$OS" = "Darwin" ] && command -v brew &>/dev/null; then
+  if brew list --formula herdr &>/dev/null; then
+    HERDR_BREW=1
+  else
+    echo "Installing herdr (Homebrew)..."
+    brew install herdr && HERDR_BREW=1 || echo "!! brew install herdr failed — falling back to the official installer"
+  fi
+  # A copy from the official installer (a run of this script before herdr came
+  # from brew) shadows brew's, since ~/.local/bin precedes /opt/homebrew/bin on
+  # PATH — and `herdr update` / `brew upgrade` then each update a different
+  # binary, so the two drift apart. brew owns herdr on this machine now.
+  if [ "$HERDR_BREW" -eq 1 ] && [ -f "$HOME/.local/bin/herdr" ] && [ ! -L "$HOME/.local/bin/herdr" ]; then
+    rm -f "$HOME/.local/bin/herdr"
+    hash -r
+    echo "Removed ~/.local/bin/herdr — superseded by Homebrew's herdr"
+  fi
+fi
 if ! command -v herdr &>/dev/null; then
   echo "Installing herdr..."
   curl -fsSL https://herdr.dev/install.sh | sh \
     || echo "!! herdr install failed — install manually: https://herdr.dev"
+fi
+
+# Keep the herdr server running from login (Homebrew's launchd service), so
+# sessions — and the auto-layout daemon's subscription — don't depend on a
+# client having been opened first.
+#
+# Not while another server is up: herdr allows one server per user, and a
+# second one exits with "herdr server is already running". That's usually the
+# server a herdr client spawned on its own, which owns every open pane, so it is
+# never stopped from here — and starting the service anyway would have launchd
+# respawn it every few seconds until that server went away.
+herdr_server_running() {
+  # ps, not pgrep: pgrep -f misses processes under some sandboxes.
+  ps -axo args= | awk '$1 ~ /(^|\/)herdr$/ && $2 == "server" { f = 1 } END { exit !f }'
+}
+if [ "$HERDR_BREW" -eq 1 ]; then
+  herdr_svc="$(brew services list 2>/dev/null | awk '$1 == "herdr" { print $2 }')"
+  if [ "$herdr_svc" = "started" ]; then
+    :
+  elif herdr_server_running; then
+    echo "!! herdr server is running outside brew services, so it won't restart at login."
+    echo "   When no agents need it: herdr server stop && brew services start herdr"
+    echo "   (stopping the server closes every herdr pane) — or just re-run ./install.sh then."
+  else
+    brew services start herdr \
+      || echo "!! could not start the herdr service — run: brew services start herdr"
+  fi
 fi
 
 # ── lazygit (git TUI) ────────────────────────────────────────
@@ -458,10 +528,35 @@ if ! lazygit_meets_floor; then
 fi
 
 # ── Nerd Font (best-effort; see note printed at end) ─────────
+# macOS gets it from Homebrew: the cask installs into ~/Library/Fonts, where
+# macOS actually looks, and `brew upgrade` keeps it current. The Linux route
+# below — unzip into ~/.local/share/fonts — does nothing on a Mac: macOS never
+# reads that dir, so the font was downloaded but not installed.
 FONT_ARCHIVE="Monaspace"                    # the release .zip name
 FONT_FACE="MonaspiceAr Nerd Font Mono"      # what you select in the terminal
+FONT_CASK="font-monaspice-nerd-font"        # Homebrew cask with the same fonts
 FONT_DIR="$XDG_DATA_HOME/fonts"
-if [ ! -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
+install_nerd_font() {
+  if [ "$OS" = "Darwin" ]; then
+    if ! command -v brew &>/dev/null; then
+      echo "!! Install the font manually: brew install --cask $FONT_CASK, or https://www.nerdfonts.com"
+      return 0
+    fi
+    if ! brew list --cask "$FONT_CASK" &>/dev/null; then
+      echo "Installing $FONT_FACE (Homebrew)..."
+      brew install --cask "$FONT_CASK" \
+        || { echo "!! $FONT_CASK install failed — run: brew install --cask $FONT_CASK"; return 0; }
+    fi
+    # An earlier run's Linux-style download: unused by macOS, and now a stale
+    # duplicate that brew upgrades won't touch.
+    if [ -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
+      rm -rf "${FONT_DIR:?}/$FONT_ARCHIVE"
+      rmdir "$FONT_DIR" 2>/dev/null || true
+      echo "Removed $FONT_DIR/$FONT_ARCHIVE — the font comes from Homebrew on macOS"
+    fi
+    return 0
+  fi
+  [ -d "$FONT_DIR/$FONT_ARCHIVE" ] && return 0
   echo "Downloading $FONT_ARCHIVE Nerd Font (contains $FONT_FACE)..."
   mkdir -p "$FONT_DIR/$FONT_ARCHIVE"
   FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.zip"
@@ -472,8 +567,8 @@ if [ ! -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
   else
     echo "!! Font download failed — grab Monaspace manually from https://www.nerdfonts.com"
   fi
-fi
-
+}
+install_nerd_font
 
 # ── Manual step that cannot be scripted ──────────────────────
 echo ""
@@ -491,12 +586,10 @@ if [ "$IS_WSL" -eq 1 ]; then
 EOF
 elif [ "$OS" = "Darwin" ]; then
   cat <<'EOF'
- On macOS: the font files were downloaded, but you still must
- select the font in your terminal app:
-   1. Install: open the .ttf files in ~/.local/share/fonts/ > "Install Font"
-      (or: brew install --cask font-monaspace-nerd-font)
-   2. Terminal/iTerm2/Ghostty > Settings > Profile > Font
-      > "MonaspiceAr Nerd Font Mono"
+ On macOS the font is installed (Homebrew), but you still must
+ select it in your terminal app:
+   Terminal/iTerm2/Ghostty > Settings > Profile > Font
+   > "MonaspiceAr Nerd Font Mono"
 EOF
 fi
 echo "────────────────────────────────────────────────────────"
@@ -505,7 +598,69 @@ echo "────────────────────────�
 # Splits every new git-worktree workspace and opens a lazygit tab. herdr has no
 # on_worktree_create hook, so this is a socket-API subscriber that needs to be
 # running; see herdr/.config/herdr/scripts/herdr-autolayout.
-if command -v systemctl &>/dev/null && systemctl --user show-environment &>/dev/null; then
+#
+# macOS has no systemd, so there it's a launchd agent instead of the unit. The
+# plist is generated rather than stowed: launchd doesn't expand ~ or $HOME, so
+# the paths in it have to be this machine's.
+HERDR_AUTOLAYOUT_LABEL="dotfiles.herdr-autolayout"
+
+herdr_autolayout_plist() {
+  local state="${XDG_STATE_HOME:-$HOME/.local/state}/herdr"
+  cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Generated by dotfiles install.sh; edits are overwritten on the next run. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$HERDR_AUTOLAYOUT_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$HOME/.config/herdr/scripts/herdr-autolayout</string>
+  </array>
+  <!-- launchd's default PATH is /usr/bin:/bin:/usr/sbin:/sbin, and the daemon
+       shells out to herdr (from Homebrew, or .local/bin). -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- The daemon reconnects by itself when the herdr server restarts; this is
+       only a backstop for a crash, like Restart=always in the systemd unit. -->
+  <key>KeepAlive</key>
+  <true/>
+  <!-- The script writes its own autolayout.log; this catches tracebacks. -->
+  <key>StandardErrorPath</key>
+  <string>$state/autolayout.launchd.log</string>
+</dict>
+</plist>
+EOF
+}
+
+install_autolayout_launchd() {
+  local plist="$HOME/Library/LaunchAgents/$HERDR_AUTOLAYOUT_LABEL.plist"
+  local domain="gui/$(id -u)" new
+  new="$(herdr_autolayout_plist)"
+  mkdir -p "$HOME/Library/LaunchAgents" "${XDG_STATE_HOME:-$HOME/.local/state}/herdr"
+  # Already current and loaded: leave the running daemon alone.
+  if [ -f "$plist" ] && [ "$(cat "$plist")" = "$new" ] \
+     && launchctl print "$domain/$HERDR_AUTOLAYOUT_LABEL" &>/dev/null; then
+    return 0
+  fi
+  printf '%s\n' "$new" >"$plist"
+  launchctl bootout "$domain/$HERDR_AUTOLAYOUT_LABEL" &>/dev/null || true
+  if launchctl bootstrap "$domain" "$plist"; then
+    echo "Loaded herdr auto-layout launchd agent ($HERDR_AUTOLAYOUT_LABEL)"
+  else
+    echo "!! could not load $plist — run: launchctl bootstrap $domain $plist"
+  fi
+}
+
+if [ "$OS" = "Darwin" ]; then
+  install_autolayout_launchd
+elif command -v systemctl &>/dev/null && systemctl --user show-environment &>/dev/null; then
   systemctl --user daemon-reload
   if systemctl --user enable --now herdr-autolayout.service &>/dev/null; then
     echo "Enabled herdr-autolayout.service (user unit)"
