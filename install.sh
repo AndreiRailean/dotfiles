@@ -13,6 +13,12 @@ cd "$DOTFILES_DIR"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
+# ~/.local/bin is where several installers below drop binaries, and nothing
+# else creates it on a fresh Mac. Starship's installer refuses a -b dir that
+# doesn't exist ("does not appear to be a directory") rather than creating it,
+# and path.sh only puts the dir on PATH if it exists at shell startup.
+mkdir -p "$HOME/.local/bin"
+
 # ── OS / environment detection ───────────────────────────────
 OS="$(uname -s)"
 IS_WSL=0
