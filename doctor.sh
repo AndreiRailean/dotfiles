@@ -34,7 +34,8 @@ if [ "$ADOPT" -eq 0 ] && command -v nvim >/dev/null 2>&1 && command -v vim >/dev
     if command -v update-alternatives >/dev/null 2>&1; then
       echo "    fix: re-run ./install.sh, or: sudo update-alternatives --set vim \"\$(command -v nvim)\""
     else
-      echo "    fix: point vim at $(command -v nvim) however this OS manages it"
+      echo "    fix: re-run ./install.sh (links ~/.local/bin/vim to nvim), and check"
+      echo "         ~/.local/bin comes before /usr/bin on PATH"
     fi
     echo
   fi

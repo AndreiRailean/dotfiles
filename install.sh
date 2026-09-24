@@ -283,6 +283,29 @@ if command -v update-alternatives &>/dev/null && command -v nvim &>/dev/null; th
   done
 fi
 
+# ── Editor links (no update-alternatives, i.e. macOS) ────────
+# macOS's /usr/bin/vim is classic vim on the sealed system volume, so it can't
+# be repointed the Debian way above. ~/.local/bin precedes /usr/bin on PATH
+# (path.sh), so vim/vi links there reach scripts too (doctor.sh included), not
+# just the interactive shells aliases.sh covers. A real file at either name is the
+# user's own and is left alone; an existing link is refreshed so it follows
+# nvim if its install location moves.
+link_vim_to_nvim() {
+  local nvim_path name dest
+  nvim_path="$(command -v nvim)" || return 0
+  for name in vim vi; do
+    dest="$HOME/.local/bin/$name"
+    if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+      echo "!! $dest is a real file, not linking it to nvim"
+      continue
+    fi
+    ln -sfn "$nvim_path" "$dest"
+  done
+}
+if ! command -v update-alternatives &>/dev/null; then
+  link_vim_to_nvim
+fi
+
 # ── 1Password CLI (op) ───────────────────────────────────────
 # Not in distro repos; use 1Password's own channels. See
 # https://developer.1password.com/docs/cli/get-started/
