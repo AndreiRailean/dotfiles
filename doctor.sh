@@ -70,6 +70,41 @@ if [ "$ADOPT" -eq 0 ] && command -v lazygit >/dev/null 2>&1; then
   fi
 fi
 
+# ── herdr background services (report-only; never affects drift) ───
+# The auto-layout daemon fails soft by design — with it down, new worktrees
+# just open unarranged and herdr itself looks fine — so its absence has to be
+# looked for. install.sh starts it (launchd on macOS, a systemd user unit
+# elsewhere) and, where herdr came from Homebrew, the herdr server service.
+if [ "$ADOPT" -eq 0 ] && command -v herdr >/dev/null 2>&1; then
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if ! launchctl print "gui/$(id -u)/dotfiles.herdr-autolayout" >/dev/null 2>&1; then
+      echo "▲ The herdr auto-layout launchd agent isn't loaded — new worktrees won't be arranged."
+      echo "    fix: re-run ./install.sh"
+      echo
+    fi
+    if command -v brew >/dev/null 2>&1 && brew list --formula herdr >/dev/null 2>&1; then
+      herdr_svc="$(brew services list 2>/dev/null | awk '$1 == "herdr" { print $2 }')"
+      if [ "$herdr_svc" != "started" ]; then
+        echo "▲ The herdr server isn't running as a brew service (status: ${herdr_svc:-none}),"
+        echo "    so it won't be up at login."
+        echo "    fix: re-run ./install.sh (it says what to do if another herdr server is running)"
+        echo
+      fi
+      if [ -f "$HOME/.local/bin/herdr" ] && [ ! -L "$HOME/.local/bin/herdr" ]; then
+        echo "▲ ~/.local/bin/herdr shadows Homebrew's herdr, and the two update separately."
+        echo "    fix: re-run ./install.sh (removes the ~/.local/bin copy)"
+        echo
+      fi
+    fi
+  elif command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    if ! systemctl --user is-active --quiet herdr-autolayout.service; then
+      echo "▲ herdr-autolayout.service isn't running — new worktrees won't be arranged."
+      echo "    fix: re-run ./install.sh, or: systemctl --user enable --now herdr-autolayout.service"
+      echo
+    fi
+  fi
+fi
+
 # ── Hook registrations resolve (report-only; never affects drift) ───
 # Every hook in the stow-managed settings.json is guarded so a missing script
 # is a no-op rather than a blocking error — see

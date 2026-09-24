@@ -321,10 +321,18 @@ agent a real persistent pane and surfaces working/blocked/done/idle state
 natively (what the tmux setup above approximates with hooks). It's the
 agent-focused driver; **tmux stays** for plain and SSH-only boxes.
 
-`install.sh` installs it via the official installer
-(`curl -fsSL https://herdr.dev/install.sh | sh`; on macOS you can also
-`brew install herdr`). It's a static, self-updating binary — `herdr update`
-keeps it current, so there's no version pin here.
+`install.sh` installs it with Homebrew on macOS (`brew install herdr`, then
+`brew services start herdr` so the server is up from login) and via the
+official installer elsewhere (`curl -fsSL https://herdr.dev/install.sh | sh`).
+There's no version pin: `brew upgrade herdr` or `herdr update` keeps it
+current. If an earlier run left the official installer's copy in
+`~/.local/bin`, a macOS run removes it so brew's is the only one.
+
+`brew services start` is skipped while another herdr server is running — there
+can only be one, and the one a herdr client spawned owns every open pane.
+`install.sh` prints how to hand over (`herdr server stop && brew services start
+herdr`, which closes those panes), and `doctor.sh` keeps reporting it until
+it's done.
 
 **Managed config** lives at `~/.config/herdr/config.toml` (a normal Stow
 package). It's deliberately minimal — herdr auto-detects agents with zero
@@ -384,16 +392,23 @@ registering a real plugin action (`plugin.action.invoke`) needs an undocumented
 plugin manifest. Calling the same function is simpler and works on an unfocused
 workspace.
 
-It runs as a systemd **user** unit (`herdr-autolayout.service`), enabled by
-`install.sh`. Logs go to `$XDG_STATE_HOME/herdr/autolayout.log` — deliberately
+It runs as a systemd **user** unit (`herdr-autolayout.service`) on Linux and
+as a launchd agent (`dotfiles.herdr-autolayout`, in `~/Library/LaunchAgents/`)
+on macOS, both set up by `install.sh`; `doctor.sh` reports either one not
+running. The plist is generated rather than stowed, because launchd doesn't
+expand `~` or `$HOME`. Logs go to `$XDG_STATE_HOME/herdr/autolayout.log` — deliberately
 outside `~/.config/herdr/`, which `doctor.sh` treats as a managed tree.
 
     systemctl --user status herdr-autolayout    # is it running?
     systemctl --user restart herdr-autolayout   # after editing the script
+    launchctl print gui/$(id -u)/dotfiles.herdr-autolayout      # macOS: running?
+    launchctl kickstart -k gui/$(id -u)/dotfiles.herdr-autolayout # macOS: restart
     tail -f ~/.local/state/herdr/autolayout.log
 
 Tunable by setting environment variables on the unit (`systemctl --user edit
-herdr-autolayout`) — `HERDR_AUTOLAYOUT_` plus:
+herdr-autolayout`) — `HERDR_AUTOLAYOUT_` plus the names below. macOS has no
+equivalent yet: `install.sh` rewrites a plist that differs from what it
+generates, so a hand edit only lasts until the next install.
 
 | | |
 | --- | --- |
