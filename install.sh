@@ -197,6 +197,30 @@ wire_shell_rc "$HOME/.zshrc"
 [ -f "$HOME/.config/git/local" ]  || { cp "$DOTFILES_DIR/git/.config/git/local.example"       "$HOME/.config/git/local";  echo "Created ~/.config/git/local — set your name/email"; }
 [ -f "$HOME/.config/shell/local.sh" ] || { cp "$DOTFILES_DIR/shell/.config/shell/local.sh.example" "$HOME/.config/shell/local.sh"; echo "Created ~/.config/shell/local.sh"; }
 
+# ── Give `git config --global` somewhere that isn't the repo ─
+# `git config --global` writes to ~/.gitconfig, falling back to
+# ~/.config/git/config ONLY when ~/.gitconfig doesn't exist — and that file is a
+# symlink into this (public) repo. So on a machine without ~/.gitconfig, every
+# tool that configures git for you writes into the tracked config. Real case:
+# 1Password's "set up SSH commit signing" added a macOS-only op-ssh-sign path
+# there, which would have broken committing on every Linux/WSL machine.
+#
+# An existing ~/.gitconfig catches those writes instead. git reads it AFTER the
+# XDG file, so whatever lands in it overrides the shared defaults, the same way
+# the [include]d ~/.config/git/local does. Never overwritten.
+seed_global_gitconfig() {
+  [ -e "$HOME/.gitconfig" ] && return 0
+  cat >"$HOME/.gitconfig" <<'EOF'
+# Machine-local git config, written by tools via `git config --global`.
+#
+# It exists so those writes land here rather than in ~/.config/git/config,
+# which is tracked in the dotfiles repo. Hand-written per-machine settings
+# (identity, signing) go in ~/.config/git/local; either file is fine.
+EOF
+  echo "Created ~/.gitconfig — catches 'git config --global' writes outside the repo"
+}
+seed_global_gitconfig
+
 if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
   echo "Installing win32yank for clipboard bridge..."
   if curl -fsSLo /tmp/win32yank.zip \
