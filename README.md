@@ -25,7 +25,7 @@ Then restart your shell (or `exec "$SHELL"`).
    left intact.
 4. Seed the per-machine files (`~/.config/git/local`, `~/.config/shell/local.sh`)
    from their `*.example` templates — never overwriting an existing one.
-5. Best-effort install Starship, a Nerd Font, and (on WSL) `win32yank` for
+5. Best-effort install Starship, a Nerd Font, Ghostty (macOS), and (on WSL) `win32yank` for
    clipboard bridging. Terminal font selection is a manual step it prints.
 
 ## Layout

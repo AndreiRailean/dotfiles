@@ -343,6 +343,20 @@ if ! command -v op &>/dev/null; then
   fi
 fi
 
+# ── Ghostty (terminal, macOS only) ───────────────────────────
+# A GUI app, so it comes from a Homebrew cask, not pkg_install. Checked by the
+# app bundle rather than PATH: the cask doesn't put `ghostty` on PATH, and an
+# app installed from the DMG instead of brew should count as installed too.
+if [ "$OS" = "Darwin" ] && [ ! -d /Applications/Ghostty.app ]; then
+  if command -v brew &>/dev/null; then
+    echo "Installing Ghostty..."
+    brew install --cask ghostty \
+      || echo "!! Ghostty install failed — download it from https://ghostty.org/download"
+  else
+    echo "!! Install Ghostty manually: https://ghostty.org/download"
+  fi
+fi
+
 # ── Starship ─────────────────────────────────────────────────
 if ! command -v starship &>/dev/null; then
   echo "Installing Starship..."
