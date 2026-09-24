@@ -8,6 +8,7 @@ command_timeout = 1000
 scan_timeout = 100
 
 format = """
+$hostname\
 $directory\
 $git_branch\
 $git_status\
@@ -24,6 +25,17 @@ $character"""
 success_symbol = "[❯](bold green)"
 error_symbol = "[❯](bold red)"
 vimcmd_symbol = "[❮](bold green)"
+
+# Every machine shares these dotfiles, so the prompts are otherwise identical
+# and the hostname is the only sign of which one a shell is on. It shows
+# everywhere, and over SSH it is prefixed with the SSH glyph so a remote shell
+# cannot pass for a local one. The glyph is U+F08C0 (nerd-font md-ssh), written
+# as a TOML escape because a private-use character does not survive an edit.
+[hostname]
+ssh_only = false
+ssh_symbol = "\U000F08C0 "
+format = "[$ssh_symbol$hostname]($style) "
+style = "bold blue"
 
 [directory]
 truncation_length = 3
