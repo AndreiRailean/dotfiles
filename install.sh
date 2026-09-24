@@ -528,10 +528,35 @@ if ! lazygit_meets_floor; then
 fi
 
 # ── Nerd Font (best-effort; see note printed at end) ─────────
+# macOS gets it from Homebrew: the cask installs into ~/Library/Fonts, where
+# macOS actually looks, and `brew upgrade` keeps it current. The Linux route
+# below — unzip into ~/.local/share/fonts — does nothing on a Mac: macOS never
+# reads that dir, so the font was downloaded but not installed.
 FONT_ARCHIVE="Monaspace"                    # the release .zip name
 FONT_FACE="MonaspiceAr Nerd Font Mono"      # what you select in the terminal
+FONT_CASK="font-monaspice-nerd-font"        # Homebrew cask with the same fonts
 FONT_DIR="$XDG_DATA_HOME/fonts"
-if [ ! -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
+install_nerd_font() {
+  if [ "$OS" = "Darwin" ]; then
+    if ! command -v brew &>/dev/null; then
+      echo "!! Install the font manually: brew install --cask $FONT_CASK, or https://www.nerdfonts.com"
+      return 0
+    fi
+    if ! brew list --cask "$FONT_CASK" &>/dev/null; then
+      echo "Installing $FONT_FACE (Homebrew)..."
+      brew install --cask "$FONT_CASK" \
+        || { echo "!! $FONT_CASK install failed — run: brew install --cask $FONT_CASK"; return 0; }
+    fi
+    # An earlier run's Linux-style download: unused by macOS, and now a stale
+    # duplicate that brew upgrades won't touch.
+    if [ -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
+      rm -rf "${FONT_DIR:?}/$FONT_ARCHIVE"
+      rmdir "$FONT_DIR" 2>/dev/null || true
+      echo "Removed $FONT_DIR/$FONT_ARCHIVE — the font comes from Homebrew on macOS"
+    fi
+    return 0
+  fi
+  [ -d "$FONT_DIR/$FONT_ARCHIVE" ] && return 0
   echo "Downloading $FONT_ARCHIVE Nerd Font (contains $FONT_FACE)..."
   mkdir -p "$FONT_DIR/$FONT_ARCHIVE"
   FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.zip"
@@ -542,8 +567,8 @@ if [ ! -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
   else
     echo "!! Font download failed — grab Monaspace manually from https://www.nerdfonts.com"
   fi
-fi
-
+}
+install_nerd_font
 
 # ── Manual step that cannot be scripted ──────────────────────
 echo ""
@@ -561,12 +586,10 @@ if [ "$IS_WSL" -eq 1 ]; then
 EOF
 elif [ "$OS" = "Darwin" ]; then
   cat <<'EOF'
- On macOS: the font files were downloaded, but you still must
- select the font in your terminal app:
-   1. Install: open the .ttf files in ~/.local/share/fonts/ > "Install Font"
-      (or: brew install --cask font-monaspace-nerd-font)
-   2. Terminal/iTerm2/Ghostty > Settings > Profile > Font
-      > "MonaspiceAr Nerd Font Mono"
+ On macOS the font is installed (Homebrew), but you still must
+ select it in your terminal app:
+   Terminal/iTerm2/Ghostty > Settings > Profile > Font
+   > "MonaspiceAr Nerd Font Mono"
 EOF
 fi
 echo "────────────────────────────────────────────────────────"
