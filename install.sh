@@ -170,10 +170,18 @@ done
 # ── Wire the shell entrypoint into each shell's rc ───────────
 # Keeps the distro-provided rc and its defaults; just appends one guarded
 # line that sources our managed init.sh. Idempotent via a marker.
+#
+# An absent rc is skipped — unless it belongs to the login shell. macOS ships
+# no ~/.zshrc, so skipping it there would leave the whole shell package inert
+# on a fresh Mac (no aliases, no PATH, no prompt); the append creates it.
 wire_shell_rc() {
-  local rc="$1" marker="# >>> dotfiles (managed) >>>"
-  [ -e "$rc" ] || return 0
-  if ! grep -qF "$marker" "$rc"; then
+  local rc="$1" marker="# >>> dotfiles (managed) >>>" login_rc=""
+  case "${SHELL##*/}" in
+    zsh)  login_rc="$HOME/.zshrc" ;;
+    bash) login_rc="$HOME/.bashrc" ;;
+  esac
+  [ -e "$rc" ] || [ "$rc" = "$login_rc" ] || return 0
+  if ! grep -qF "$marker" "$rc" 2>/dev/null; then
     {
       printf '\n%s\n' "$marker"
       printf '%s\n' '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/init.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/init.sh"'
