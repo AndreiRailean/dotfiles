@@ -34,3 +34,20 @@ git -C <main checkout> merge --ff-only origin/main
 `ff-probe.sh` asks this question after a `gh pr merge` runs, but it cannot see a
 merge done in the web UI or one you are simply told about. That is why the rule
 is here as well as in the hook.
+
+Then delete the local branch the merged PR came from, so branches do not pile up
+waiting for a cleanup pass:
+
+```
+git branch -d <branch>
+```
+
+- **Only branches this session created.** Never another session's, however
+  merged it looks — sessions share one repository's branch list, and another
+  session's branch may still be in use.
+- `-d`, not `-D`. A squash or rebase merge leaves the branch's commits off main,
+  so `-d` refuses; confirm the PR is merged (`gh pr view <n> --json state`) and
+  only then use `-D`.
+- A branch checked out in a worktree cannot be deleted. In your own worktree,
+  `git switch --detach origin/main` first; never touch another worktree.
+- Leave the remote branch alone — GitHub deletes it on merge.
