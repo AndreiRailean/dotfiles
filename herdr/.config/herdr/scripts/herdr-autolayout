@@ -46,7 +46,7 @@ Two things guard against that, because neither is sufficient alone:
     actually appears in the pane's foreground group — and if it never does,
     clear the input line and send again.
 
-Two quirks of the 0.7.5 API this works around:
+Two quirks of the 0.7.5 API this works around (both still present in 0.9.3):
 
   * `events.wait` looks like it can match workspace events, but the server
     replies `unsupported_event_wait_match` ("currently supports pane agent

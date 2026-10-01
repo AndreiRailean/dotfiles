@@ -1,7 +1,7 @@
 # herdr configuration — managed by dotfiles.
 #
 # ┌─ RETEST AFTER A herdr UPGRADE ────────────────────────────────────────────┐
-# │ Last verified against: herdr 0.7.5                                        │
+# │ Last verified against: herdr 0.9.3                                        │
 # │                                                                           │
 # │ The worktree auto-layout (scripts/herdr-autolayout, prefix+shift+L, and   │
 # │ herdr-autolayout.service) rests on two behaviours the API does NOT        │
@@ -30,7 +30,7 @@
 # see the full set of options.
 #
 # NOTE: ~/.config/herdr/ also holds runtime state (herdr*.sock, herdr*.log,
-# session.json, .plugins.lock). Those are git-ignored — only this file is
+# session.json, session-snapshots/, .plugins.lock). Those are git-ignored — only this file is
 # tracked/stowed.
 
 # Skip the first-run onboarding (we set our preferences below).
