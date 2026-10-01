@@ -76,3 +76,8 @@ height = "50%"
 
 [ui]
 agent_panel_sort = "priority"
+
+# herdr 0.9 dropped the blank line between agent rows (row_gap now defaults to
+# 0), which packs the agent list too tightly to scan. 1 restores the old spacing.
+[ui.sidebar.agents]
+row_gap = 1
