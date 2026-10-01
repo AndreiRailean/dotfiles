@@ -17,6 +17,8 @@ herdr/.config/herdr/*.log
 herdr/.config/herdr/*.sock
 herdr/.config/herdr/session.json
 herdr/.config/herdr/.plugins.lock
+# Session recovery copies herdr (0.9+) writes before overwriting session.json.
+herdr/.config/herdr/session-snapshots/
 # Changelog for the herdr build that happens to be installed on this machine —
 # herdr's own data, not our config, and it differs per host by version.
 herdr/.config/herdr/release-notes.json
