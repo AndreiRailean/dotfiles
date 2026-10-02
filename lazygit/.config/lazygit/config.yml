@@ -46,5 +46,6 @@ os:
   editPreset: nvim
 
 gui:
-  # install.sh places the Monaspace Nerd Font, so the glyph set is available.
+  # The Monaspace Nerd Font is in the terminal that draws this: install.sh puts
+  # it on macOS and Linux desktops; on SSH/WSL it's on the client machine.
   nerdFontsVersion: "3"
