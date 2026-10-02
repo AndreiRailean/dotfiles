@@ -532,10 +532,19 @@ fi
 # macOS actually looks, and `brew upgrade` keeps it current. The Linux route
 # below — unzip into ~/.local/share/fonts — does nothing on a Mac: macOS never
 # reads that dir, so the font was downloaded but not installed.
+#
+# On Linux it goes only where something local draws with it. Over SSH the
+# client's terminal renders the glyphs, and in WSL it's Windows Terminal (WSLg
+# sets DISPLAY, so WSL is ruled out first). A shell reached over SSH has no
+# DISPLAY even on a desktop, so an installed X/Wayland session type also
+# counts. `systemctl get-default` is no help: headless VMs report
+# graphical.target too.
 FONT_ARCHIVE="Monaspace"                    # the release .zip name
 FONT_FACE="MonaspiceAr Nerd Font Mono"      # what you select in the terminal
 FONT_CASK="font-monaspice-nerd-font"        # Homebrew cask with the same fonts
 FONT_DIR="$XDG_DATA_HOME/fonts"
+FONT_SESSION_DIRS="/usr/share/xsessions /usr/share/wayland-sessions"
+FONT_SKIPPED=0                              # set when this box has no display
 install_nerd_font() {
   if [ "$OS" = "Darwin" ]; then
     if ! command -v brew &>/dev/null; then
@@ -553,6 +562,22 @@ install_nerd_font() {
       rm -rf "${FONT_DIR:?}/$FONT_ARCHIVE"
       rmdir "$FONT_DIR" 2>/dev/null || true
       echo "Removed $FONT_DIR/$FONT_ARCHIVE — the font comes from Homebrew on macOS"
+    fi
+    return 0
+  fi
+  local has_display=0 d
+  if [ "${IS_WSL:-0}" -ne 1 ]; then
+    [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && has_display=1
+    for d in $FONT_SESSION_DIRS; do [ -d "$d" ] && has_display=1; done
+  fi
+  if [ "$has_display" -eq 0 ]; then
+    FONT_SKIPPED=1
+    # An earlier run's download, from before headless boxes were skipped.
+    if [ -d "$FONT_DIR/$FONT_ARCHIVE" ]; then
+      rm -rf "${FONT_DIR:?}/$FONT_ARCHIVE"
+      rmdir "$FONT_DIR" 2>/dev/null || true
+      command -v fc-cache &>/dev/null && fc-cache -f >/dev/null 2>&1
+      echo "Removed $FONT_DIR/$FONT_ARCHIVE — nothing on this machine draws with it"
     fi
     return 0
   fi
@@ -590,6 +615,14 @@ elif [ "$OS" = "Darwin" ]; then
  select it in your terminal app:
    Terminal/iTerm2/Ghostty > Settings > Profile > Font
    > "MonaspiceAr Nerd Font Mono"
+EOF
+elif [ "$FONT_SKIPPED" -eq 1 ]; then
+  cat <<'EOF'
+ No display here, so the font was not installed: over SSH your
+ local terminal draws the glyphs. Install the font on the machine
+ you SSH from (nerdfonts.com, or on macOS:
+ brew install --cask font-monaspice-nerd-font), then select
+ "MonaspiceAr Nerd Font Mono" in that terminal.
 EOF
 fi
 echo "────────────────────────────────────────────────────────"
