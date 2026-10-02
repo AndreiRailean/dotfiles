@@ -6,8 +6,8 @@
 # nor a directory and --adopt not specified", exit 1). install.sh runs under
 # `set -euo pipefail`, so that refusal doesn't just skip one package — it kills
 # the whole install at the stow loop, and EVERY later step is silently skipped:
-# the remaining packages, the lazygit binary install, the Nerd Font, the
-# auto-layout unit. The observed symptom was "install.sh doesn't install the
+# the remaining packages, the lazygit binary install (since removed), the Nerd
+# Font, the auto-layout unit. The observed symptom was "install.sh doesn't install the
 # right lazygit version": in fact it never reached that block at all.
 #
 # The trigger is ordinary. Tools write a config on first run, so any machine
@@ -134,13 +134,12 @@ fi
 # it back — committing the stale empty file forever, which is the same loss
 # --adopt-ing the stow conflict would have caused.
 DOC="$REPO/doctor.sh"
-mkdir -p "$T/dhome/.config/lazygit"
-ln -s "$REPO/lazygit/.config/lazygit/config.yml" "$T/dhome/.config/lazygit/config.yml"
-printf '' >"$T/dhome/.config/lazygit/config.yml.pre-dotfiles.1234567890"
+mkdir -p "$T/dhome/.config/starship"
+ln -s "$REPO/starship/.config/starship/devserver-port.sh" "$T/dhome/.config/starship/devserver-port.sh"
+printf '' >"$T/dhome/.config/starship/devserver-port.sh.pre-dotfiles.1234567890"
 # A genuinely untracked file, so a pass can't come from the scan being broken
-# or from this root being skipped altogether. Deliberately NOT state.yml —
-# .gitignore lists that one, so doctor.sh is meant to stay quiet about it.
-printf 'probe\n' >"$T/dhome/.config/lazygit/probe-untracked.yml"
+# or from this root being skipped altogether.
+printf 'probe\n' >"$T/dhome/.config/starship/probe-untracked.yml"
 doc_out="$(HOME="$T/dhome" bash "$DOC" 2>&1 || true)"
 assert_contains "$doc_out" "probe-untracked.yml" \
   "doctor.sh does scan the managed root (control: a real untracked file is found)"
