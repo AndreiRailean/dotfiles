@@ -3,8 +3,8 @@
 # honest until someone extracts a shared library.
 #
 # WHY THIS FILE EXISTS: the two scripts share no shell library, so several
-# pieces of knowledge live in both — the package list, owned_roots, the lazygit
-# version floor, stow's flag set, how the repo root is derived. Nothing enforces
+# pieces of knowledge live in both — the package list, owned_roots,
+# stow's flag set, how the repo root is derived. Nothing enforces
 # that, and the failures are silent: doctor.sh reporting a package install.sh
 # never stowed, or a floor check that passes in one script and fails in the
 # other. It has already cost a real bug — install.sh derived the repo root with
@@ -45,26 +45,6 @@ d_or="$(awk '/^owned_roots\(\)/,/^}/' "$DOC")"
 [ -n "$d_or" ] && pass "found doctor.sh's owned_roots()" \
   || fail "found doctor.sh's owned_roots() (not at column 0?)"
 assert_eq "$i_or" "$d_or" "the two owned_roots() bodies are identical"
-
-# ── The lazygit version floor ─────────────────────────────────
-# install.sh upgrades anything below the floor; doctor.sh reports it. Both parse
-# `lazygit --version` with the same fiddly sed (the greedy-match trap: the line
-# ends with git's OWN version, so the match is anchored on `, os=`). If only one
-# copy is corrected, one script silently disagrees with the other about whether
-# the machine is healthy.
-i_re="$(grep -o 'version=\[\^0-9\].*os=\.\*/\\1/p' "$INST")"
-d_re="$(grep -o 'version=\[\^0-9\].*os=\.\*/\\1/p' "$DOC")"
-[ -n "$i_re" ] && pass "found the version-parsing sed in install.sh" \
-  || fail "found the version-parsing sed in install.sh"
-assert_eq "$i_re" "$d_re" "both scripts parse lazygit --version identically"
-
-i_floor="$(grep -o '\$minor" -ge [0-9]*' "$INST" | grep -o '[0-9]*$')"
-d_floor="$(grep -o '\$lg_minor" -lt [0-9]*' "$DOC" | grep -o '[0-9]*$')"
-[ -n "$i_floor" ] && pass "found install.sh's floor constant" \
-  || fail "found install.sh's floor constant"
-[ -n "$d_floor" ] && pass "found doctor.sh's floor constant" \
-  || fail "found doctor.sh's floor constant"
-assert_eq "$i_floor" "$d_floor" "both scripts use the same lazygit minor-version floor"
 
 # ── How the repo root is derived ──────────────────────────────
 # `pwd -P` in both, and identical. install.sh compares resolved symlink targets

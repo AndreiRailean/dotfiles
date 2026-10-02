@@ -43,8 +43,7 @@ fi
 # stow refuses to link over a target that is a real file rather than a symlink
 # or a directory, and under `set -e` that refusal doesn't just skip the one
 # package — it aborts this whole script at the loop below, silently skipping
-# every later step (the remaining packages, the lazygit binary, the font, the
-# auto-layout unit). The trigger is ordinary: tools write a config on first
+# every later step (the remaining packages, the font, the auto-layout unit). The trigger is ordinary: tools write a config on first
 # run, so any machine that used a tool BEFORE this repo managed it has exactly
 # such a file sitting on the target. lazygit is the case that surfaced this —
 # it leaves an empty ~/.config/lazygit/config.yml on first launch — but
@@ -153,19 +152,47 @@ prune_dead_links() {
   done < <(owned_roots "$pkg")
 }
 
+# Roots of packages removed from the repo altogether. prune_dead_links only
+# visits packages that still exist, so a whole package's `git rm` would leave
+# its links dangling on every other machine. Same narrow rule — dangling and
+# pointing into this repo — and the root goes too once nothing else is in it,
+# since no package stows there any more. Binaries an old install put in
+# ~/.local/bin are left alone: they may still be in use.
+RETIRED_ROOTS=".config/lazygit"
+prune_retired_roots() {
+  local root troot entry tgt
+  for root in $RETIRED_ROOTS; do
+    troot="$HOME/$root"
+    [ -d "$troot" ] && [ ! -L "$troot" ] || continue
+    while IFS= read -r entry; do
+      [ -L "$entry" ] && [ ! -e "$entry" ] || continue   # dangling only
+      tgt="$(link_target_abs "$entry")" || continue
+      case "$tgt" in
+        "$DOTFILES_DIR"/*)
+          rm -f "$entry"
+          echo "Removed dead link ~/${entry#"$HOME"/} — its package is no longer in the repo"
+          ;;
+      esac
+    done < <(find "$troot" -type l)
+    # -empty and -depth are in BSD find too; rmdir refuses anything non-empty.
+    find "$troot" -depth -type d -empty -exec rmdir {} \; 2>/dev/null || true
+  done
+}
+
 # ── Symlink packages into $HOME ──────────────────────────────
 # --no-folding: create real directories with per-file symlinks rather than
 # symlinking whole dirs into the repo. This keeps ~/.config/shell (etc.) a
 # real directory so per-machine files (local.sh, git 'local') land OUTSIDE
 # the repo instead of inside it.
 # shell must come first so XDG vars exist for anything sourced later.
-for pkg in shell git nvim tmux starship herdr lazygit claude; do
+for pkg in shell git nvim tmux starship herdr claude; do
   [ -d "$pkg" ] || continue
   echo "Stowing $pkg..."
   clear_stow_conflicts "$pkg"
   stow -v --no-folding --target="$HOME" --restow "$pkg"
   prune_dead_links "$pkg"
 done
+prune_retired_roots
 
 # ── Wire the shell entrypoint into each shell's rc ───────────
 # Keeps the distro-provided rc and its defaults; just appends one guarded
@@ -446,87 +473,6 @@ if [ "$HERDR_BREW" -eq 1 ]; then
   fi
 fi
 
-# ── lazygit (git TUI) ────────────────────────────────────────
-# Launched by hand when it's wanted — nothing in this repo starts it for you.
-#
-# Only the upstream release is installed here — never the distro package
-# (see Amendment 1 in the plan). lazygit 0.64 replaced the git.paging config
-# block with git.diffRenderers, and an older package-manager build (Debian
-# trixie ships 0.50) ignores diffRenderers silently: no delta, no warning.
-# Falling back to that would be worse than failing loudly, so the version is
-# guaranteed by installing the release tarball, rather than left to whatever
-# a package manager happens to ship. ~/.local/bin precedes /usr/bin on PATH
-# (shell/.config/shell/path.sh:14), so the release build installed here
-# genuinely supersedes a distro lazygit already sitting on the machine.
-install_lazygit_release() {
-  local ver os arch url tmp
-  ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
-         | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)" || return 1
-  [ -n "$ver" ] || return 1
-  case "$(uname -s)" in
-    Linux)  os=Linux  ;;
-    Darwin) os=Darwin ;;
-    *) return 1 ;;
-  esac
-  case "$(uname -m)" in
-    x86_64|amd64)  arch=x86_64 ;;
-    arm64|aarch64) arch=arm64  ;;
-    *) return 1 ;;
-  esac
-  # Asset name repeats the version WITHOUT the tag's leading v.
-  url="https://github.com/jesseduffield/lazygit/releases/download/v${ver}/lazygit_${ver}_${os}_${arch}.tar.gz"
-  tmp="$(mktemp -d)" || return 1
-  if curl -fsSL "$url" -o "$tmp/lazygit.tar.gz" \
-     && tar -xzf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit; then
-    if mkdir -p "$HOME/.local/bin" \
-       && install -m 755 "$tmp/lazygit" "$HOME/.local/bin/lazygit"; then
-      rm -rf "$tmp"
-      return 0
-    fi
-  fi
-  rm -rf "$tmp"
-  return 1
-}
-
-# lazygit >= 0.64.0 is a hard floor: 0.64 replaced git.paging with
-# git.diffRenderers, the schema our config uses, and anything older ignores
-# those keys silently — no error, no warning — so a lazygit merely being on
-# PATH isn't enough; it has to clear this floor, or get upgraded via
-# install_lazygit_release above. `lazygit --version` prints one line
-# containing `version=X.Y.Z`; apt's build additionally quotes it and appends
-# a Debian revision (verified: `version='0.50.0+ds1-1+b2'`), so skip any
-# non-digit characters after `version=` rather than assuming a bare value.
-# The line also ends in `git version=A.B.C` — anchor the match on the `, os=`
-# field that follows lazygit's own version, or a greedy `.*` grabs git's
-# version instead and the floor check would pass on git's major version, not
-# lazygit's. Compare major/minor numerically — no `sort -V`, it's GNU-only
-# and this script also runs on macOS. Only major/minor are compared because
-# the floor's patch is 0 today; if a future floor bump needs a patch (e.g.
-# 0.64.2), extend this comparison to include it. doctor.sh's "lazygit version
-# health" check duplicates this comparison for reporting — keep both in sync if
-# the floor value changes. See docs/adr/0001-no-shared-shell-library.md for why
-# there is no shared lib, and tests/test-shared-logic-sync.sh which enforces it.
-lazygit_meets_floor() {
-  local out ver major minor
-  command -v lazygit &>/dev/null || return 1
-  out="$(lazygit --version 2>/dev/null)" || return 1
-  ver="$(printf '%s\n' "$out" | sed -n 's/.*version=[^0-9]*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)[^,]*, *os=.*/\1/p')"
-  [ -n "$ver" ] || return 1
-  major="${ver%%.*}"
-  minor="${ver#*.}"; minor="${minor%%.*}"
-  case "$major" in ''|*[!0-9]*) return 1 ;; esac
-  case "$minor" in ''|*[!0-9]*) return 1 ;; esac
-  [ "$major" -gt 0 ] && return 0
-  [ "$major" -eq 0 ] && [ "$minor" -ge 64 ] && return 0
-  return 1
-}
-
-if ! lazygit_meets_floor; then
-  echo "Installing lazygit..."
-  install_lazygit_release \
-    || echo "!! lazygit install failed — install manually: https://github.com/jesseduffield/lazygit/releases"
-fi
-
 # ── Nerd Font (best-effort; see note printed at end) ─────────
 # macOS gets it from Homebrew: the cask installs into ~/Library/Fonts, where
 # macOS actually looks, and `brew upgrade` keeps it current. The Linux route
@@ -628,7 +574,7 @@ fi
 echo "────────────────────────────────────────────────────────"
 
 # ── herdr auto-layout daemon ─────────────────────────────────
-# Splits every new git-worktree workspace and opens a lazygit tab. herdr has no
+# Splits every new git-worktree workspace. herdr has no
 # on_worktree_create hook, so this is a socket-API subscriber that needs to be
 # running; see herdr/.config/herdr/scripts/herdr-autolayout.
 #

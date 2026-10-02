@@ -48,7 +48,6 @@ claude/.claude/statusline-command.sh -> ~/.claude/statusline-command.sh
 herdr/.config/herdr/config.toml -> ~/.config/herdr/config.toml
 herdr/.config/herdr/scripts/    -> ~/.config/herdr/scripts/
 herdr/.config/systemd/user/     -> ~/.config/systemd/user/
-lazygit/.config/lazygit/config.yml -> ~/.config/lazygit/config.yml
 ```
 
 Everything is XDG-based (`~/.config`, `~/.local/share`, …).
@@ -85,8 +84,8 @@ nothing is silently overwritten.
 
 This applies to every package, not just this one. `stow` refuses to link over a
 target that is a real file, and under `set -e` that refusal aborts the whole
-install — so a config a tool wrote before this repo managed it (lazygit creates
-an empty `~/.config/lazygit/config.yml` on first launch) would otherwise stop
+install — so a config a tool wrote before this repo managed it (a tool that
+writes an empty config on first launch, say) would otherwise stop
 the run before it installed anything further. `install.sh` displaces any such
 file to `<name>.pre-dotfiles.<epoch>`; `doctor.sh` ignores those backups, so
 delete them once you've salvaged anything machine-local.
@@ -178,22 +177,6 @@ the running git accepts it.
 
 `$PAGER` itself stays plain `less`, so non-interactive callers (`man`,
 `systemctl`, …) are unaffected.
-
-[lazygit](https://github.com/jesseduffield/lazygit) reuses delta for its own
-diffs, with the same guarded `|| less` fallback — but adds `--no-gitconfig`, so
-it ignores the `delta` block above. That's deliberate: `side-by-side` is right
-for a diff filling the terminal and unreadable in lazygit's half-width panel,
-and delta's `--side-by-side` is a plain flag that can't be switched off with
-`=false`.
-
-`install.sh` installs lazygit from the **upstream release**, not the distro
-package, and gates on a version floor of **0.64.0** — upgrading an older binary
-rather than skipping it. 0.64 replaced the `git.paging` config block with
-`git.diffRenderers`, which is what `lazygit/.config/lazygit/config.yml` uses;
-older lazygit ignores those keys silently, so a Debian-packaged 0.50 would give
-you no delta and no warning. If a future lazygit migrates the schema again it
-rewrites the config in place, through the stow symlink — that shows up as
-ordinary drift in `git status` here.
 
 ## Per-machine settings
 

@@ -179,6 +179,45 @@ else
   pass "pruning still works when the repo is reached through a symlink"
 fi
 
+# ── A package removed from the repo altogether ────────────────
+# prune_dead_links walks owned_roots of a package that still exists, so once
+# a whole package is `git rm`ed (lazygit) nothing visits its root any more and
+# its links dangle forever. install.sh lists the roots of retired packages and
+# prunes them the same narrow way; the root itself goes too once empty, since
+# no package will stow into it again.
+case "$(awk '/^prune_retired_roots\(\)/,/^}/' "$INST")" in
+  *"prune_retired_roots()"*) pass "install.sh defines prune_retired_roots() at column 0 (extractable)" ;;
+  *) fail "install.sh defines prune_retired_roots() at column 0 (extractable)"; finish ;;
+esac
+assert_contains "$(grep -m1 '^RETIRED_ROOTS=' "$INST")" ".config/lazygit" \
+  "lazygit's old root is listed as retired"
+RFNS="$(awk '/^link_target_abs\(\)/,/^}/' "$INST")
+$(awk '/^prune_retired_roots\(\)/,/^}/' "$INST")"
+
+R="$T/retired"
+mkdir -p "$R/home/dotfiles" "$R/home/.config/old/sub" "$R/home/.config/mixed"
+ln -s "../../dotfiles/old/.config/old/old.yml" "$R/home/.config/old/old.yml"
+ln -s "../../../dotfiles/old/.config/old/sub/x" "$R/home/.config/old/sub/x"
+ln -s "../../dotfiles/old/.config/mixed/m.yml" "$R/home/.config/mixed/m.yml"
+printf 'mine\n' >"$R/home/.config/mixed/notes.txt"
+ln -s "/nonexistent/elsewhere" "$R/home/.config/mixed/foreign"
+run_retired() {
+  ( cd "$R/home/dotfiles" && HOME="$R/home" DOTFILES_DIR="$R/home/dotfiles" bash -c "$RFNS
+    RETIRED_ROOTS='.config/old .config/mixed .config/absent'
+    prune_retired_roots" 2>&1 )
+}
+rout="$(run_retired)"
+[ ! -e "$R/home/.config/old" ] && pass "retired root holding only our dead links is removed outright" \
+  || fail "retired root holding only our dead links is removed outright (output: $rout)"
+[ ! -L "$R/home/.config/mixed/m.yml" ] && pass "retired root: our dead link is removed" \
+  || fail "retired root: our dead link is removed"
+assert_contains "$rout" "m.yml" "retired-root removals are reported"
+assert_eq "$(cat "$R/home/.config/mixed/notes.txt" 2>/dev/null)" "mine" \
+  "retired root: a real file is left alone, and so is its directory"
+[ -L "$R/home/.config/mixed/foreign" ] && pass "retired root: a link aimed outside the repo is left alone" \
+  || fail "retired root: a link aimed outside the repo is left alone"
+assert_not_contains "$(run_retired)" "Removed" "retired roots: a second pass prunes nothing further"
+
 # ── doctor.sh should name the fix, not just the symptom ────────
 assert_contains "$(sed -n '/Broken symlinks/,+3p' "$REPO/doctor.sh")" "install.sh" \
   "doctor.sh points at ./install.sh as the fix for broken symlinks"

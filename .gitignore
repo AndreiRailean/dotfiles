@@ -26,13 +26,3 @@ herdr/.config/herdr/release-notes.json
 # Python bytecode from running the herdr auto-layout daemon or py_compile.
 __pycache__/
 *.pyc
-
-# Older lazygit wrote its own state (last-used branch, panel sizes) next to
-# its config; 0.64, the version this repo requires, writes it under
-# $XDG_STATE_HOME instead (~/.local/state/lazygit/state.yml, verified live —
-# outside this repo's concern, and not this entry's target). This line is
-# kept as harmless insurance in case a future or older lazygit ever does
-# write state beside the config again; --no-folding makes ~/.config/lazygit
-# a real directory, so if that happens doctor.sh would otherwise flag it as
-# drift.
-lazygit/.config/lazygit/state.yml
