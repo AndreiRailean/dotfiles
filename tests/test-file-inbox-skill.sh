@@ -32,6 +32,9 @@ assert_contains "$body" '&& ssh <user>@<host> touch <inbox>/.done' \
   "the user's command writes .done only after the copy succeeds"
 # rsync over SSH needs both ends; the VM this was written on had none.
 assert_contains "$body" "command -v rsync" "rsync is offered only where it is installed"
+# ...and install.sh puts it everywhere, so that fallback stays the exception.
+grep -q '^ensure_tool rsync rsync' "$REPO/install.sh" \
+  && pass "install.sh installs rsync" || fail "install.sh installs rsync"
 
 # The session watches; the user does not have to report back.
 assert_contains "$body" 'until [ -e <inbox>/.done ]' "the session waits on .done in the background"

@@ -276,6 +276,10 @@ ensure_tool ripgrep rg         # fast recursive grep
 ensure_tool fzf fzf            # fuzzy finder (shell integration in tools.sh)
 ensure_tool jq jq              # JSON processor (Claude status line)
 ensure_tool direnv direnv      # per-directory env (shell hook in tools.sh)
+# rsync over SSH needs the binary on both ends, so a machine without it can't
+# receive a resumable copy (the file-inbox skill falls back to scp). macOS ships
+# one, so this only installs on Linux/WSL.
+ensure_tool rsync rsync
 # delta (syntax-highlighted git diffs) — the package is git-delta on apt, brew
 # AND pacman. Not `delta`: on Debian/Ubuntu that name belongs to an unrelated
 # 2006-era binary-diff tool.
