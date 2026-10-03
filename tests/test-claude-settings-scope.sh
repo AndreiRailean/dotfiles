@@ -94,7 +94,7 @@ ALLOWED=" attribution includeCoAuthoredBy includeGitInstructions theme
   enableAllProjectMcpServers enabledMcpjsonServers disabledMcpjsonServers
   model fallbackModel effortLevel modelSettings alwaysThinkingEnabled
   fastMode fastModePerSessionOptIn preferredNotifChannel
-  skipAutoPermissionPrompt skipDangerousModePermissionPrompt
+  skipAutoPermissionPrompt skipDangerousModePermissionPrompt skipWorkflowUsageWarning
   useAutoModeDuringPlan autoCompactEnabled autoCompactWindow
   precomputeCompactionEnabled cleanupPeriodDays respectGitignore
   syntaxHighlightingDisabled spinnerTipsEnabled spinnerVerbs
