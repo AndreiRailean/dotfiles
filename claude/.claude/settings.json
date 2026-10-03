@@ -66,5 +66,6 @@
   "fastModePerSessionOptIn": true,
   "theme": "auto",
   "preferredNotifChannel": "terminal_bell",
-  "skipAutoPermissionPrompt": true
+  "skipAutoPermissionPrompt": true,
+  "skipWorkflowUsageWarning": true
 }
