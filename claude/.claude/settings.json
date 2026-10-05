@@ -43,7 +43,7 @@
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
+    "code-review@claude-plugins-official": false,
     "code-simplifier@claude-plugins-official": false,
     "github@claude-plugins-official": false,
     "claude-md-management@claude-plugins-official": false,
@@ -52,7 +52,8 @@
     "supabase@claude-plugins-official": false,
     "stripe@claude-plugins-official": false,
     "mattpocock-skills@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "engineering@synced": false
   },
   "extraKnownMarketplaces": {
     "mattpocock": {
@@ -68,5 +69,18 @@
   "preferredNotifChannel": "terminal_bell",
   "skipAutoPermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
-  "cleanupPeriodDays": 183
+  "cleanupPeriodDays": 183,
+  "skillOverrides": {
+    "file-inbox": "off",
+    "sentry-cli": "off",
+    "anthropic-skills:docs": "off",
+    "anthropic-skills:docx": "off",
+    "anthropic-skills:google-workspace": "off",
+    "anthropic-skills:import-memory": "off",
+    "anthropic-skills:morning": "off",
+    "anthropic-skills:pdf": "off",
+    "anthropic-skills:pptx": "off",
+    "anthropic-skills:skill-creator": "off",
+    "anthropic-skills:xlsx": "off"
+  }
 }
