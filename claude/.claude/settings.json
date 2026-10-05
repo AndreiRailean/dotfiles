@@ -67,5 +67,6 @@
   "theme": "auto",
   "preferredNotifChannel": "terminal_bell",
   "skipAutoPermissionPrompt": true,
-  "skipWorkflowUsageWarning": true
+  "skipWorkflowUsageWarning": true,
+  "cleanupPeriodDays": 183
 }
