@@ -1,8 +1,8 @@
 #!/bin/sh
 # statusline-command.sh contract: print ONE line combining the user's real
 # starship prompt with session stats read from the JSON payload Claude Code
-# pipes in on stdin — context window usage, plan rate limits, and the active
-# model. Every stat segment is optional: Claude Code omits or nulls these keys
+# pipes in on stdin — tokens in the context window, plan rate limits, and the
+# active model. Every stat segment is optional: Claude Code omits or nulls these keys
 # early in a session, right after /compact, and on older versions, and the
 # line must stay useful rather than print "ctx %" or crash.
 #
@@ -53,21 +53,23 @@ render() { printf '%s' "$1" | bash "$SCRIPT"; }
 render_plain() { render "$1" | sed -E "s/${ESC}\[[0-9;]*m//g"; }
 
 # A complete payload, matching the shape Claude Code documents: a 1M-context
-# model at 12% usage, both rate-limit windows present, fast mode off.
+# model holding 123,456 tokens (12%), both rate-limit windows present, fast
+# mode off.
 FULL='{
   "cwd": "/home/andrei/dotfiles",
   "model": {"id": "claude-opus-5[1m]", "display_name": "Opus 5 (1M context)"},
   "workspace": {"current_dir": "/home/andrei/dotfiles"},
   "effort": {"level": "high"},
   "fast_mode": false,
-  "context_window": {"context_window_size": 1000000, "used_percentage": 12, "remaining_percentage": 88},
+  "context_window": {"total_input_tokens": 123456, "context_window_size": 1000000, "used_percentage": 12, "remaining_percentage": 88},
   "rate_limits": {"five_hour": {"used_percentage": 50}, "seven_day": {"used_percentage": 19}}
 }'
 
 out=$(render_plain "$FULL")
 assert_contains "$out" "finance-notes" "the starship prompt still renders"
 assert_not_contains "$out" "❯" "the bare character glyph is still dropped"
-assert_contains "$out" "ctx 12%" "context usage renders from used_percentage"
+assert_contains "$out" "ctx 123k" "context usage renders as a token count"
+assert_not_contains "$out" "ctx 12%" "context usage is not shown as a percentage of the window"
 assert_contains "$out" "5h 50%" "the five-hour rate limit renders"
 assert_contains "$out" "7d 19%" "the seven-day rate limit renders"
 assert_contains "$out" "Opus 5 1M" "the model name renders without the (… context) suffix"
@@ -77,22 +79,33 @@ assert_not_contains "$out" "⚡" "no fast-mode bolt when fast mode is off"
 lines=$(render "$FULL" | wc -l)
 assert_eq "$lines" "0" "the whole line is emitted without a trailing newline"
 
-# Color thresholds: green under 50, yellow 50-79, red 80 and up. The rate
-# limit windows share the scale, which is why FULL's 50% five-hour window is
-# the yellow case below.
+# Color thresholds. Rate limits: green under 50, yellow 50-79, red 80 and up.
+# Context is judged in tokens, because a 1M window makes its percentage tiny:
+# yellow from 200k (where idle compaction kicks in), red from 400k. The
+# percentage thresholds still apply too, so a 200k-window model warns as well.
 out=$(render "$FULL")
-assert_contains "$out" "${GREEN}ctx 12%" "context usage under 50% is green"
+assert_contains "$out" "${GREEN}ctx 123k" "context under 200k tokens is green"
 assert_contains "$out" "${YELLOW}5h 50%" "a rate limit window at 50% is yellow"
 
-HOT=$(printf '%s' "$FULL" | sed 's/"used_percentage": 12/"used_percentage": 85/')
-assert_contains "$(render "$HOT")" "${RED}ctx 85%" "context usage at 80% or more is red"
+ctx() { printf '%s' "$FULL" | sed "s/\"total_input_tokens\": 123456/\"total_input_tokens\": $1/; s/\"used_percentage\": 12/\"used_percentage\": $2/"; }
+assert_contains "$(render "$(ctx 199999 20)")" "${GREEN}ctx 200k" "199,999 tokens is still green (and rounds to 200k)"
+assert_contains "$(render "$(ctx 266294 27)")" "${YELLOW}ctx 266k" "context at 200k tokens or more is yellow"
+assert_contains "$(render "$(ctx 450000 45)")" "${RED}ctx 450k" "context at 400k tokens or more is red"
+assert_contains "$(render "$(ctx 160000 80)")" "${RED}ctx 160k" "80% of a small window is red even under 400k tokens"
+assert_contains "$(render "$(ctx 110000 55)")" "${YELLOW}ctx 110k" "50% of a small window is yellow even under 200k tokens"
 
-MID=$(printf '%s' "$FULL" | sed 's/"used_percentage": 12/"used_percentage": 79/')
-assert_contains "$(render "$MID")" "${YELLOW}ctx 79%" "context usage at 79% is yellow"
+# Formatting at the edges of the k scale.
+assert_contains "$(render_plain "$(ctx 850 0)")" "ctx 850 " "under 1k tokens prints the raw count"
+assert_contains "$(render_plain "$(ctx 1000000 100)")" "ctx 1.0M" "a full 1M window prints in millions"
+
+# Older versions send used_percentage without total_input_tokens; keep the
+# percentage rather than drop the segment.
+NOTOK=$(printf '%s' "$FULL" | sed 's/"total_input_tokens": 123456, //')
+assert_contains "$(render_plain "$NOTOK")" "ctx 12%" "without total_input_tokens the percentage is shown"
 
 # Fractional percentages: the payload documents a number, not an integer, and
 # a float would blow up the [ -ge ] threshold comparison.
-FRAC=$(printf '%s' "$FULL" | sed 's/"used_percentage": 12/"used_percentage": 12.7/')
+FRAC=$(printf '%s' "$NOTOK" | sed 's/"used_percentage": 12/"used_percentage": 12.7/')
 out=$(render_plain "$FRAC")
 assert_contains "$out" "ctx 12%" "a fractional percentage is truncated, not passed to test -ge"
 
@@ -101,9 +114,10 @@ FAST=$(printf '%s' "$FULL" | sed 's/"fast_mode": false/"fast_mode": true/')
 assert_contains "$(render_plain "$FAST")" "⚡high" "fast mode marks the model segment"
 
 # Absent and null stats. Claude Code nulls used_percentage before the first
-# API call and again after /compact; rate_limits is absent on API-key auth;
+# API call and again after /compact (total_input_tokens is then 0, which must
+# not render as "ctx 0"); rate_limits is absent on API-key auth;
 # older versions have no context_window at all.
-NULLPCT=$(printf '%s' "$FULL" | sed 's/"used_percentage": 12/"used_percentage": null/')
+NULLPCT=$(ctx 0 null)
 out=$(render_plain "$NULLPCT")
 assert_not_contains "$out" "ctx" "a null used_percentage prints no context segment"
 assert_contains "$out" "5h 50%" "a null used_percentage still leaves the rate limits"
@@ -129,7 +143,7 @@ mkdir -p "$TMP/nojq"
 ln -s "$(command -v jq)" "$TMP/nojq/jq"
 out=$(printf '%s' "$FULL" | env PATH="$TMP/nojq:/usr/bin:/bin" HOME="$TMP/nohome" bash "$SCRIPT" \
   | sed -E "s/${ESC}\[[0-9;]*m//g")
-assert_contains "$out" "ctx 12%" "the no-starship fallback still shows context usage"
+assert_contains "$out" "ctx 123k" "the no-starship fallback still shows context usage"
 assert_contains "$out" "Opus 5 1M" "the no-starship fallback still shows the model"
 
 finish

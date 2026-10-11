@@ -5,8 +5,8 @@
 # the status line always matches what the terminal shows, including future
 # starship.toml edits.
 #
-# Then append the session stats Claude Code stops showing here: context window
-# usage, the two plan rate-limit windows, and the active model. Configuring a
+# Then append the session stats Claude Code stops showing here: tokens in the
+# context window, the two plan rate-limit windows, and the active model. Configuring a
 # custom status line suppresses the footer hint row, and the `N% context used`
 # readout lives in that row — so once this script exists, it owes the user that
 # number back.
@@ -29,6 +29,7 @@ input=$(cat)
 {
   IFS= read -r cwd
   IFS= read -r ctx_pct
+  IFS= read -r ctx_tokens
   IFS= read -r rl_5h
   IFS= read -r rl_7d
   IFS= read -r model
@@ -38,6 +39,7 @@ input=$(cat)
   printf '%s' "$input" | jq -r '[
     (.cwd // ""),
     (.context_window.used_percentage // ""),
+    (.context_window.total_input_tokens // ""),
     (.rate_limits.five_hour.used_percentage // ""),
     (.rate_limits.seven_day.used_percentage // ""),
     (.model.display_name // ""),
@@ -75,15 +77,51 @@ pct_color() {
   fi
 }
 
+# Context is shown in tokens, not as a percentage of the window: on a 1M-token
+# model the percentage sits in single digits for a whole session. Yellow from
+# 200k, where idle compaction starts to apply, red from 400k. The percentage
+# thresholds still count, so a 200k-window model warns before it is full.
+CTX_WARN_TOKENS=200000
+CTX_HOT_TOKENS=400000
+
+ctx_color() {
+  if [ "$1" -ge "$CTX_HOT_TOKENS" ] || [ "$2" -ge 80 ]; then
+    printf '%s' "$RED"
+  elif [ "$1" -ge "$CTX_WARN_TOKENS" ] || [ "$2" -ge 50 ]; then
+    printf '%s' "$YELLOW"
+  else
+    printf '%s' "$GREEN"
+  fi
+}
+
+# 850 -> 850, 83522 -> 84k, 1000000 -> 1.0M. Same width as the "10%" it replaced.
+fmt_tokens() {
+  if [ "$1" -lt 1000 ]; then
+    printf '%s' "$1"
+  elif [ "$1" -lt 999500 ]; then
+    printf '%sk' "$((($1 + 500) / 1000))"
+  else
+    local tenths=$((($1 + 50000) / 100000))
+    printf '%s.%sM' "$((tenths / 10))" "$((tenths % 10))"
+  fi
+}
+
 # Build the stats half of the line. Every segment is independently optional:
 # used_percentage is null before the first API call and again after /compact,
 # rate_limits is absent when authenticating with an API key, and versions
 # before 2.1.x send none of it.
 render_stats() {
-  local segs=() n name suffix joined s
+  local segs=() n t name suffix joined s
 
+  # used_percentage gates the segment: it is null whenever there is no usage
+  # to report, while total_input_tokens is 0 then rather than null. Versions
+  # that send no token count keep the percentage.
   if n=$(pct_int "$ctx_pct"); then
-    segs+=("$(pct_color "$n")ctx ${n}%${RESET}")
+    if t=$(pct_int "$ctx_tokens") && [ "$t" -gt 0 ]; then
+      segs+=("$(ctx_color "$t" "$n")ctx $(fmt_tokens "$t")${RESET}")
+    else
+      segs+=("$(pct_color "$n")ctx ${n}%${RESET}")
+    fi
   fi
   if n=$(pct_int "$rl_5h"); then
     segs+=("$(pct_color "$n")5h ${n}%${RESET}")
