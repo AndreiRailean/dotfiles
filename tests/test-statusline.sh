@@ -1,6 +1,6 @@
 #!/bin/sh
-# statusline-command.sh contract: print ONE line combining the user's real
-# starship prompt with session stats read from the JSON payload Claude Code
+# statusline-command.sh contract: print TWO lines — the user's real starship
+# prompt, then session stats read from the JSON payload Claude Code
 # pipes in on stdin — tokens in the context window, plan rate limits, and the
 # active model. Every stat segment is optional: Claude Code omits or nulls these keys
 # early in a session, right after /compact, and on older versions, and the
@@ -28,12 +28,33 @@ trap 'rm -rf "$TMP"' EXIT
 
 mkdir -p "$TMP/bin" "$TMP/nohome"
 
-# Fake starship: ignores the flags it is handed and replays a prompt shaped
-# like the real thing — leading blank line from add_newline, the segments,
-# then the bare `character` glyph the script is expected to drop.
+# Fake starship: answers the two subcommands the script uses. print-config
+# returns a format string behind the comment lines the real one prints (which
+# name modules too, and must not be rendered). `module` draws each module the
+# way starship does: optional plain prefix, a style, the text, a reset, a
+# space. The directory is the --path basename; the branch comes from
+# $STUB_BRANCH.
 cat > "$TMP/bin/starship" <<'STUB'
-#!/bin/sh
-printf '\n\033[34mfinance-notes\033[0m on \033[35mcustomer-names-cron\033[0m\n\033[32m❯\033[0m\n'
+#!/bin/bash
+E=$'\033'
+cmd=$1 mod=$2 path=""
+while [ $# -gt 0 ]; do [ "$1" = --path ] && path=$2; shift; done
+case "$cmd" in
+  print-config)
+    printf '# $all is shorthand for $time$battery\n'
+    printf 'format = "$hostname$directory$git_branch$git_status$line_break$character"\n'
+    ;;
+  module)
+    case "$mod" in
+      hostname) printf '%s[1;34mbox%s[0m ' "$E" "$E" ;;
+      directory) printf '%s[1;36m%s%s[0m ' "$E" "${path##*/}" "$E" ;;
+      git_branch) printf 'on %s[1;35mB %s%s[0m ' "$E" "${STUB_BRANCH:-customer-names-cron}" "$E" ;;
+      git_status) printf '%s[1;33m[!2]%s[0m ' "$E" "$E" ;;
+      character) printf '%s[32m❯%s[0m ' "$E" "$E" ;;
+      *) printf 'UNEXPECTED-%s ' "$mod" ;;
+    esac
+    ;;
+esac
 exit 0
 STUB
 chmod +x "$TMP/bin/starship"
@@ -56,7 +77,7 @@ render_plain() { render "$1" | sed -E "s/${ESC}\[[0-9;]*m//g"; }
 # model holding 123,456 tokens (12%), both rate-limit windows present, fast
 # mode off.
 FULL='{
-  "cwd": "/home/andrei/dotfiles",
+  "cwd": "/home/andrei/finance-notes",
   "model": {"id": "claude-opus-5[1m]", "display_name": "Opus 5 (1M context)"},
   "workspace": {"current_dir": "/home/andrei/dotfiles"},
   "effort": {"level": "high"},
@@ -67,7 +88,10 @@ FULL='{
 
 out=$(render_plain "$FULL")
 assert_contains "$out" "finance-notes" "the starship prompt still renders"
+assert_contains "$out" "on B customer-names-cron" "the git branch renders when it differs from the folder"
+assert_contains "$out" "[!2]" "modules after the branch still render"
 assert_not_contains "$out" "❯" "the bare character glyph is still dropped"
+assert_not_contains "$out" "UNEXPECTED" "modules named only in print-config comments are not rendered"
 assert_contains "$out" "ctx 123k" "context usage renders as a token count"
 assert_not_contains "$out" "ctx 12%" "context usage is not shown as a percentage of the window"
 assert_contains "$out" "5h 50%" "the five-hour rate limit renders"
@@ -77,7 +101,20 @@ assert_contains "$out" "high" "the effort level renders"
 assert_not_contains "$out" "⚡" "no fast-mode bolt when fast mode is off"
 
 lines=$(render "$FULL" | wc -l)
-assert_eq "$lines" "0" "the whole line is emitted without a trailing newline"
+assert_eq "$lines" "1" "two lines are emitted, without a trailing newline"
+assert_eq "$(render_plain "$FULL" | head -1 | grep -c ctx)" "0" "the stats are not on the prompt line"
+assert_eq "$(render_plain "$FULL" | tail -1 | cut -c1-8)" "ctx 123k" "the stats line starts with the context count"
+
+# Folder and branch trimming.
+out=$(printf '%s' "$FULL" | STUB_BRANCH=finance-notes bash "$SCRIPT" | sed -E "s/${ESC}\[[0-9;]*m//g")
+assert_not_contains "$out" "on B" "a branch named like its folder is left out"
+assert_contains "$out" "[!2]" "leaving the branch out keeps the modules after it"
+
+LONG=$(printf '%s' "$FULL" | sed 's#/home/andrei/finance-notes#/w/promote-beta-head-to-stable#')
+out=$(printf '%s' "$LONG" | STUB_BRANCH=feat/very-long-branch-name bash "$SCRIPT" | sed -E "s/${ESC}\[[0-9;]*m//g")
+assert_contains "$out" "box …beta-head-to-stable on" "a long folder keeps its last 20 characters"
+assert_contains "$out" "on B feat/very-long-bran… [!2]" "a long branch keeps its first 20 characters"
+assert_contains "$(printf '%s' "$LONG" | STUB_BRANCH=feat/very-long-branch-name bash "$SCRIPT")" "${ESC}[1;36m…beta-head-to-stable${ESC}[0m" "a cut folder keeps its color"
 
 # Color thresholds. Rate limits: green under 50, yellow 50-79, red 80 and up.
 # Context is judged in tokens, because a 1M window makes its percentage tiny:
@@ -127,11 +164,11 @@ out=$(render_plain "$NOCTX")
 assert_not_contains "$out" "ctx" "an absent context_window prints no context segment"
 assert_not_contains "$out" "5h" "absent rate_limits print no rate limit segment"
 assert_contains "$out" "Sonnet 5" "a display_name without a context suffix is left alone"
-assert_contains "$out" "finance-notes" "the prompt still renders on a minimal payload"
+assert_contains "$out" "box" "the prompt still renders on a minimal payload"
 
 # A payload that isn't JSON at all must not take the line down.
 out=$(printf 'not json' | bash "$SCRIPT" | sed -E "s/${ESC}\[[0-9;]*m//g")
-assert_contains "$out" "finance-notes" "unparseable input still renders the prompt"
+assert_contains "$out" "box" "unparseable input still renders the prompt"
 assert_not_contains "$out" "ctx" "unparseable input prints no stats"
 
 # The fallback path exists for when starship is missing — losing the context
