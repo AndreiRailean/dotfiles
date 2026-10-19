@@ -1,5 +1,5 @@
 #!/bin/sh
-# ff-probe.sh â ask whether the main checkout needs fast-forwarding.
+# ff-probe.sh — ask whether the main checkout needs fast-forwarding.
 #
 # WHY THIS FILE EXISTS: a post-merge fast-forward is a reflex, not a task, and
 # a reflex that lives in prose does not fire. The rule existed for months as one
@@ -12,11 +12,11 @@
 # short probe and exits. The agent decides and acts, so a wrong guess here costs
 # one sentence rather than a surprising checkout.
 #
-# It cannot see a merge it was not present for â one done in the web UI, or one
+# It cannot see a merge it was not present for — one done in the web UI, or one
 # the user simply reports in chat. That half is covered in CLAUDE.md, which is
 # read unconditionally.
 #
-# It runs on EVERY Bash tool call, so the merge path uses shell `case` only â
+# It runs on EVERY Bash tool call, so the merge path uses shell `case` only —
 # no subprocesses. It must always exit 0: a hook that fails is a hook that
 # disrupts every command the agent runs.
 #
