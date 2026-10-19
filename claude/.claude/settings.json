@@ -55,15 +55,6 @@
     "frontend-design@claude-plugins-official": true,
     "engineering@synced": false
   },
-  "extraKnownMarketplaces": {
-    "mattpocock": {
-      "source": {
-        "source": "github",
-        "repo": "mattpocock/skills"
-      },
-      "autoUpdate": true
-    }
-  },
   "fastModePerSessionOptIn": true,
   "theme": "auto",
   "preferredNotifChannel": "terminal_bell",
