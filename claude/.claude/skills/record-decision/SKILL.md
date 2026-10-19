@@ -76,6 +76,10 @@ are not deliberate choices made in advance.
 
 Filename `docs/adr/YYYYMMDD-slug.md` — date-stem, no `ADR-` prefix.
 
+`type: ADR` is the default. If the repo's `domain.md` lists its own `type`
+values, use one of those instead: it is content, so domain.md wins, and a
+repo that defines them may have a guard test that rejects `ADR`.
+
 ```markdown
 ---
 type: ADR
