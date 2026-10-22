@@ -1,10 +1,25 @@
 {
+  "cleanupPeriodDays": 183,
   "attribution": {
     "commit": "",
     "pr": ""
   },
   "permissions": {
     "defaultMode": "auto"
+  },
+  "model": "opus",
+  "skillOverrides": {
+    "file-inbox": "off",
+    "sentry-cli": "off",
+    "anthropic-skills:docs": "off",
+    "anthropic-skills:docx": "off",
+    "anthropic-skills:google-workspace": "off",
+    "anthropic-skills:import-memory": "off",
+    "anthropic-skills:morning": "off",
+    "anthropic-skills:pdf": "off",
+    "anthropic-skills:pptx": "off",
+    "anthropic-skills:skill-creator": "off",
+    "anthropic-skills:xlsx": "off"
   },
   "hooks": {
     "SessionStart": [
@@ -55,23 +70,15 @@
     "frontend-design@claude-plugins-official": true,
     "engineering@synced": false
   },
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "high"
+    }
+  },
   "fastModePerSessionOptIn": true,
+  "skipWorkflowUsageWarning": true,
   "theme": "auto",
   "preferredNotifChannel": "terminal_bell",
   "skipAutoPermissionPrompt": true,
-  "skipWorkflowUsageWarning": true,
-  "cleanupPeriodDays": 183,
-  "skillOverrides": {
-    "file-inbox": "off",
-    "sentry-cli": "off",
-    "anthropic-skills:docs": "off",
-    "anthropic-skills:docx": "off",
-    "anthropic-skills:google-workspace": "off",
-    "anthropic-skills:import-memory": "off",
-    "anthropic-skills:morning": "off",
-    "anthropic-skills:pdf": "off",
-    "anthropic-skills:pptx": "off",
-    "anthropic-skills:skill-creator": "off",
-    "anthropic-skills:xlsx": "off"
-  }
+  "switchModelsOnFlag": true
 }
