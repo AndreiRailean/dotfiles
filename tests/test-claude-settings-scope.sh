@@ -105,7 +105,7 @@ ALLOWED=" attribution includeCoAuthoredBy includeGitInstructions theme
   promptSuggestionEnabled emojiCompletionEnabled showClearContextOnPlanAccept
   workflowSizeGuideline workflowKeywordTriggerEnabled skillOverrides
   autoUpdatesChannel minimumVersion voice voiceEnabled spellcheck
-  feedbackSurveyRate feedbackDrafts axScreenReader "
+  feedbackSurveyRate feedbackDrafts axScreenReader switchModelsOnFlag "
 # The list above is wrapped for readability, so its entries are separated by
 # newlines and indentation as well as spaces. Collapse all whitespace to single
 # spaces and re-pad the ends, so the " $k " match below sees a uniform
