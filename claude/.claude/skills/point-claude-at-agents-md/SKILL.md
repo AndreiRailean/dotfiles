@@ -1,16 +1,23 @@
 ---
 name: point-claude-at-agents-md
-description: Use when a repo has an AGENTS.md that no CLAUDE.md imports, when the agents-md-probe hook reports conventions missing from context, or when a session has been working from codebase discovery in a repo that documented its conventions somewhere Claude Code never loaded.
+description: Use when a repo has both a CLAUDE.md and an AGENTS.md the CLAUDE.md never imports, when the agents-md-probe hook reports conventions missing from context, or when a session has been working from codebase discovery in a repo that documented its conventions somewhere Claude Code never loaded.
 ---
 
 # Point Claude at AGENTS.md
 
-Claude Code loads `CLAUDE.md`. It does not load `AGENTS.md`. A repo that
-writes only the latter hands Claude nothing, and the session never finds out —
-it cannot distinguish "no conventions here" from "conventions I was never
-given", so it silently works from discovery instead.
+Since 2.1.277 Claude Code loads `AGENTS.md` itself, but only as a fallback:
+a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the session
+directory or above it switches the fallback off for the whole session, and
+then no `AGENTS.md` loads unless a `CLAUDE.md` imports it. A repo with both
+files and no import hands Claude half its conventions, and the session never
+finds out — it cannot distinguish "no conventions here" from "conventions I
+was never given", so it silently works from discovery instead.
 
-Fix it by adding a sibling `CLAUDE.md` that imports the `AGENTS.md`.
+Fix it by importing the `AGENTS.md` from its sibling `CLAUDE.md`.
+
+A repo with only `AGENTS.md` needs nothing: the fallback loads it. Adding a
+`CLAUDE.md` there is still worth it when someone keeps a `CLAUDE.local.md`,
+which would otherwise switch the fallback off on their machine alone.
 
 ## Write the pointer, not the rules
 
@@ -20,7 +27,7 @@ import and the reason it exists — nothing else.
 ```markdown
 # Project conventions
 
-Claude Code does not read `AGENTS.md`, so this file imports it.
+Claude Code skips `AGENTS.md` once a `CLAUDE.md` exists, so this file imports it.
 
 @AGENTS.md
 ```

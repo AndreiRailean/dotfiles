@@ -60,10 +60,12 @@ symlinked into `~/.claude`; the rest of that directory (state, sessions,
 history) is left alone.
 
 Not to be confused with this repo's own root `CLAUDE.md`, which is not stowed
-anywhere. Claude Code doesn't read `AGENTS.md` — as of 2.1.269 the only place
-the CLI mentions that filename is the `/import` path that migrates a Codex
-project *into* a `CLAUDE.md` — so the root file exists purely to `@AGENTS.md`
-it back in for sessions working **in this repo**. Both files stay pointers;
+anywhere. Since 2.1.277 Claude Code loads `AGENTS.md` on its own, but only
+when no `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` switches that
+fallback off — so the root file exists purely to `@AGENTS.md` it in explicitly
+for sessions working **in this repo**, whatever local files a machine has.
+`agents-md-probe.sh` flags other repos where that fallback is off and nothing
+imports their `AGENTS.md`. Both files stay pointers;
 the rules live in skills and `docs/agents/`, per
 [docs/adr/20260809-rules-in-skill-body.md](docs/adr/20260809-rules-in-skill-body.md).
 
