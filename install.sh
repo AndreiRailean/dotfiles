@@ -296,19 +296,42 @@ if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_t
 #
 # Skipped entirely when nvim is already installed, so a machine deliberately
 # tracking the unstable/nightly PPA keeps it.
+#
+# The PPA only publishes for the Ubuntu releases its maintainers have built
+# for, and a new release has none at launch (26.04 had none). add-apt-repository
+# adds the source anyway, and a source with no Release file makes EVERY later
+# `apt update` fail — on a fresh 26.04 VM that broke the Docker and gh installs
+# that ran after this. So probe for the release first, and if setup still
+# fails, take the source back out rather than leave apt broken.
+add_nvim_ppa() {
+  local codename="$1"
+  local release="https://ppa.launchpadcontent.net/neovim-ppa/stable/ubuntu/dists/$codename/Release"
+  if [ -z "$codename" ] || ! curl -fsLI --max-time 10 -o /dev/null "$release"; then
+    echo "neovim PPA has no build for '${codename:-unknown}' — using the distro package"
+    return 1
+  fi
+  if sudo apt install -y software-properties-common \
+     && sudo add-apt-repository -y ppa:neovim-ppa/stable \
+     && sudo apt update; then
+    return 0
+  fi
+  echo "!! neovim PPA setup failed — removing it and falling back to the distro package"
+  sudo add-apt-repository -y --remove ppa:neovim-ppa/stable >/dev/null 2>&1 || true
+  return 1
+}
+
 if ! command -v nvim &>/dev/null; then
   echo "Installing neovim..."
-  nvim_ppa=0
+  nvim_ppa=0 codename=""
   if command -v apt &>/dev/null; then
     # PPAs are Ubuntu-only — Debian and other apt distros get the distro pkg.
     distro="$( . /etc/os-release 2>/dev/null && printf '%s %s' "${ID:-}" "${ID_LIKE:-}" )" || distro=""
     case "$distro" in *ubuntu*) nvim_ppa=1 ;; esac
+    # Mint/Pop set ID_LIKE=ubuntu and carry the base Ubuntu codename here.
+    codename="$( . /etc/os-release 2>/dev/null && printf '%s' "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}" )" || codename=""
   fi
   if [ "$nvim_ppa" -eq 1 ]; then
-    sudo apt install -y software-properties-common \
-      && sudo add-apt-repository -y ppa:neovim-ppa/stable \
-      && sudo apt update \
-      || echo "!! neovim PPA setup failed — falling back to the distro package"
+    add_nvim_ppa "$codename" || true
   fi
   pkg_install neovim \
     || echo "!! neovim install failed — see https://github.com/neovim/neovim/blob/master/INSTALL.md"
