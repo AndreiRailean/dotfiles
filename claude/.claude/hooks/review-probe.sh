@@ -21,6 +21,12 @@
 # with the command, and let a PR body mentioning "already exists" silence a
 # create that succeeded.
 #
+# Known limit: prose inside a command that quotes the captured form, such as
+# a commit message describing `n=$(gh pr create ...)`, fires it, since the
+# captured form prints no URL to tell the two apart. That happened while this
+# file was being written; it costs one ignored sentence, and telling quoted
+# text from invoked text needs a shell parser.
+#
 # A repo that writes its own review rule can ship and register its own
 # .claude/hooks/review-probe.sh, and this one is then silent there, so the
 # question is asked once and in that repo's words. Not when the command
