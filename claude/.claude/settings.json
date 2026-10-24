@@ -47,6 +47,10 @@
           {
             "type": "command",
             "command": "[ -r \"$HOME/.claude/hooks/ff-probe.sh\" ] && sh \"$HOME/.claude/hooks/ff-probe.sh\" merge || exit 0"
+          },
+          {
+            "type": "command",
+            "command": "[ -r \"$HOME/.claude/hooks/review-probe.sh\" ] && sh \"$HOME/.claude/hooks/review-probe.sh\" || exit 0"
           }
         ]
       }
