@@ -12,9 +12,20 @@
 # and ff-probe.sh: hang the question off an event that fires on its own, here
 # the gap between opening a PR and merging it.
 #
-# A repo that writes its own review rule can ship its own
-# .claude/hooks/review-probe.sh, and then this one is silent there, so the
-# question is asked once and in that repo's words.
+# It fires on the outcome, not the spelling. The command names `gh` and
+# `pr create` in any form ($(...), an env prefix, -R, bash -c), and either
+# the response carries a PR URL (/pull/), which prose and a failed create
+# never print, or the command captures the output in $(...), which hides the
+# URL. A first version matched the spelling, as ff-probe.sh does, and a review
+# found it missed `n=$(gh pr create ...)`, fired on prose that began a line
+# with the command, and let a PR body mentioning "already exists" silence a
+# create that succeeded.
+#
+# A repo that writes its own review rule can ship and register its own
+# .claude/hooks/review-probe.sh, and this one is then silent there, so the
+# question is asked once and in that repo's words. Not when the command
+# changes directory: the PR may be in another repo, where that rule is the
+# wrong one, and the repo's probe stands aside for this one then.
 #
 # It performs NO judgement and writes NO files. It runs on EVERY Bash tool
 # call, so the match uses shell `case` only, and it must always exit 0.
@@ -30,21 +41,34 @@ while IFS= read -r line || [ -n "$line" ]; do
   line=''
 done
 
-[ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "$CLAUDE_PROJECT_DIR/.claude/hooks/review-probe.sh" ] && exit 0
+cmd="${payload%%\"tool_response\"*}"
+resp="${payload#*\"tool_response\"}"
+[ "$resp" = "$payload" ] && resp=''
 
-# Match only the command half, and only where gh pr create is invoked rather
-# than quoted in prose, for the reasons ff-probe.sh records.
-head="${payload%%\"tool_response\"*}"
-case "$head" in
-  *'"command":"gh pr create'*|*'"command": "gh pr create'*) ;;
-  *'&& gh pr create'*|*'&&gh pr create'*) ;;
-  *'; gh pr create'*|*';gh pr create'*) ;;
-  *'\ngh pr create'*) ;;
+case "$cmd" in
+  *'gh '*'pr create'*) ;;
   *) exit 0 ;;
 esac
-# A create that failed opened nothing to review.
-case "$payload" in
-  *'already exists'*|*'could not create'*|*'GraphQL:'*) exit 0 ;;
+case "$resp" in
+  *'/pull/'*) ;;
+  *)
+    case "$cmd" in
+      *'$(gh '*'pr create'*|*'$( gh '*'pr create'*) ;;
+      *) exit 0 ;;
+    esac
+    ;;
+esac
+
+# Defer to the repo's own probe only where it is registered and will speak.
+case "$cmd" in
+  *'cd '*) ;;
+  *)
+    own="${CLAUDE_PROJECT_DIR:-}/.claude"
+    if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "$own/hooks/review-probe.sh" ] \
+      && grep -qs 'review-probe.sh' "$own/settings.json" "$own/settings.local.json"; then
+      exit 0
+    fi
+    ;;
 esac
 
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' \
