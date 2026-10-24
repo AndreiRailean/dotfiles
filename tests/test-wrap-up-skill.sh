@@ -48,6 +48,14 @@ first_step=$(grep -n '^## 1\.' "$SKILL" | cut -d: -f1)
   && pass "the repo's own wrap-up is checked before step 1" \
   || fail "the repo's own wrap-up is checked before step 1"
 assert_contains "$body" "stop reading here" "the hand-over replaces this skill, not adds to it"
+# The probe reads the starting directory and the skill the current one, so a
+# session can record here and hand over elsewhere.
+handover_text="$(sed -n '/^## 0\./,/^## The one rule/p' "$SKILL")"
+assert_contains "$handover_text" "ledger.sh open" "the hand-over still reads this ledger"
+
+# PRs by author include other sessions'; a merge cannot be taken back.
+assert_not_contains "$body" "gh pr list" "PRs come from the ledger, not from a search by author"
+assert_contains "$body" "Merging is not a wrap-up step" "a wrap-up never merges on its own"
 
 assert_contains "$body" "Return what is yours. Report everything else." "body states the one rule"
 assert_contains "$body" "read unfiltered" "tree check is read unfiltered"
@@ -78,6 +86,24 @@ echo 'stray words' >>"$f"
 out="$(sh "$L" open 2>&1)"
 assert_contains "$out" "last reviewed: abc123" "the last review boundary is printed"
 assert_contains "$out" "is not taken:, returned: or reviewed:" "an unreadable line is reported, not dropped"
+
+# A doubled return once drove the count to -1, so the next taken: read as 0
+# and the item vanished from the wrap-up.
+export CLAUDE_CODE_SESSION_ID=s3
+sh "$L" taken 'branch a' >/dev/null
+sh "$L" returned 'branch a' >/dev/null
+sh "$L" returned 'branch a' >/dev/null
+sh "$L" taken 'branch a (again)' >/dev/null
+out="$(sh "$L" open 2>&1)"
+assert_contains "$out" "open: branch a (again)" "a doubled return cannot hide a later taken:"
+assert_contains "$out" "nothing open under that name" "the doubled return is reported"
+
+# A name can end in "(1)". The key cuts it; what is printed must not, since
+# the skill removes files by the path it reads here.
+sh "$L" taken 'file /x/report (1)' >/dev/null
+out="$(sh "$L" open 2>&1)"
+assert_contains "$out" "open: file /x/report (1)" "an open item is printed as it was taken"
+export CLAUDE_CODE_SESSION_ID=s1
 
 out="$(CLAUDE_CODE_SESSION_ID='' sh "$L" taken 'branch y' 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && pass "refuses to write without a session ID" || fail "refuses to write without a session ID"
@@ -127,6 +153,16 @@ if [ -d /proc/self ]; then
   assert_contains "$out" "sleep 30" "a process left running in the worktree is listed"
   assert_not_contains "$out" "ledger.sh" "the script's own processes are not"
   assert_not_contains "$out" "test-wrap-up-skill" "nor the shell that ran it"
+
+  # A worktree nested under this one (.claude/worktrees/) is that worktree's.
+  ( cd "$TMP/plain" && $G commit --quiet --allow-empty -m init &&
+    $G worktree add --quiet .claude/worktrees/w >/dev/null 2>&1 )
+  ( cd "$TMP/plain/.claude/worktrees/w" && exec sleep 31 ) &
+  inner=$!
+  sleep 0.2
+  out="$(cd "$TMP/plain" && sh "$L" procs; :)"
+  kill "$inner" 2>/dev/null
+  assert_not_contains "$out" "sleep 31" "a process in a nested worktree is that worktree's"
 fi
 
 # ── the probe ─────────────────────────────────────────────────
@@ -140,8 +176,19 @@ assert_not_contains "$out" "open item" "a fresh session has nothing open"
 out="$(probe s1 "$TMP/plain")"
 assert_contains "$out" "already holds 3 open item(s)" "a resumed session is told what is open"
 
+# A repo's own wrap-up is not its own ledger rule: andrei.md asks for a ledger
+# only in the skill body, read at the end, and framestep keeps none.
 out="$(probe s2 "$TMP/own/pkg")"
-assert_eq "$out" "" "the probe is silent where the repo has its own wrap-up"
+assert_contains "$out" "ledger.sh taken" "a repo wrap-up alone does not silence the probe"
+printf 'Keep a ledger from your first action.\n' >"$TMP/own/CLAUDE.md"
+out="$(probe s2 "$TMP/own/pkg")"
+assert_eq "$out" "" "silent where the repo's always-loaded instructions ask for their own ledger"
+# The word alone, with no wrap-up of the repo's own to read that ledger, is not.
+mkdir -p "$TMP/word"
+$G init --quiet "$TMP/word"
+printf 'The general ledger lives in accounts/.\n' >"$TMP/word/CLAUDE.md"
+out="$(probe s2 "$TMP/word")"
+assert_contains "$out" "ledger.sh taken" "mentioning a ledger without a wrap-up of its own does not silence it"
 
 out="$(printf '{"session_id":"s2","cwd":"%s"}' "$TMP/plain" | LEDGER_SH="$TMP/missing.sh" sh "$PROBE")"; rc=$?
 assert_eq "$out$rc" "0" "silent, and exits 0, when the skill is not installed"

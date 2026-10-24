@@ -20,9 +20,11 @@ sh ${CLAUDE_SKILL_DIR}/ledger.sh project-skill
 
 If it prints a path, this repo wrote its own wrap-up. **Read that file and
 follow it instead of this one, from its first line; stop reading here.** It
-knows the repo's servers, build output and shared resources, and it keeps its
-own ledger where its own instructions say. Where it writes
-`${CLAUDE_SKILL_DIR}`, read the directory that file is in.
+knows the repo's servers, build output and shared resources. Where it writes
+`${CLAUDE_SKILL_DIR}`, read the directory that file is in. Wherever it says
+the ledger is, also run `sh ${CLAUDE_SKILL_DIR}/ledger.sh open`: a
+session-start note may have had this session record there instead, and
+every open item it lists is this session's too.
 
 If it prints nothing, carry on.
 
@@ -78,10 +80,12 @@ Then look for what outlived the command that started it:
 sh ${CLAUDE_SKILL_DIR}/ledger.sh procs
 ```
 
-It lists every process whose working directory is inside this worktree,
-leaving out your own shell and Claude. A process started elsewhere (a server
-run with `-C`, a browser a test launched) can be missing from it, so the
-ledger still decides. Kill by pid, and only a pid you can tie to this session. `pkill -f` and
+It lists **candidates**: every process whose working directory is inside this
+worktree, leaving out your own shell, Claude and nested worktrees. Another
+session in the same checkout, a terminal pane opened here and an MCP server
+show too, and a process started elsewhere (a server run with `-C`) does not,
+so the ledger still decides. Kill by pid, and only a pid you can tie to this
+session; report the rest with their age. `pkill -f` and
 `pgrep -f` match the Bash tool's own wrapper, so `pkill` kills your shell
 (exit 144) and a `pgrep` wait loop never ends.
 
@@ -113,8 +117,8 @@ look for them:
 git status --porcelain --ignored | grep '^!!'
 ```
 
-Remove each file the ledger names, by its exact path, and gitignored output
-this session's builds wrote into the worktree. **Remove by exact path only.**
+Remove each file the ledger names, by its exact path as `ledger.sh open`
+prints it, and the output of each build this conversation ran in the worktree. **Remove by exact path only.**
 `/tmp` and every scratchpad beside yours hold files you cannot tell from your
 own; `rm /tmp/name.*` reached for them once. `git clean -X` takes every ignored
 file, including the machine's own local config, and is never part of a
@@ -129,7 +133,6 @@ session's is left among the ignored files, other than what the report names.
 git fetch origin --prune
 git worktree list
 git stash list
-gh pr list --author @me --state open
 ```
 
 **`--prune` first.** `git branch -d` checks against the branch's upstream
@@ -143,11 +146,14 @@ reads "not fully merged" and is not true.
   `git worktree remove <path>`.
 - **The stash:** read, never pop. Apply an entry of yours by SHA and drop it by
   its tag; every other entry stays, and is counted in the report.
-- **PRs:** each one you opened is merged, or reported with its check status.
+- **PRs:** for each PR in the ledger, `gh pr view <n> --json state` and
+  `gh pr checks <n>`, and report both. Merging is not a wrap-up step: merge
+  only one the user already asked you to merge. Every other open PR on the
+  repo, yours by author or not, belongs to whichever session opened it.
 
 **Done when:** `git status --porcelain` prints nothing, **read unfiltered**; no
 branch, worktree or stash entry from the ledger remains unless the report says
-why; and every PR you opened is merged or reported.
+why; and every PR in the ledger is merged or reported with its checks.
 
 ## 5. What would be forgotten
 
@@ -198,14 +204,16 @@ tree: 0 changes (git status --porcelain | wc -l, unfiltered) · HEAD: <branch> @
 ledger: <n> taken, <n> returned, <n> open (each named, with why) | not kept
 background: 0 · servers: stopped | left for review of <what> · others reported: <n>
 branches deleted: <names> · worktrees: <n> · stash: <n>, <n> mine
-open PRs: <numbers and checks, or 0> · main checkout: <sha> | untouched, why
+PRs in the ledger: <number: state, checks> · main checkout: <sha> | untouched, why
 signals: <n> (<what was examined>) · findings: <n>
 not captured: <each finding and item, with its suggested capture>
 left running on purpose: <what, and why>
 ```
 
 **Ready to close means every line is zero or names a reason**, and the tree
-line takes no reason. `git status --porcelain` prints nothing: not "nothing of
-mine", not "nothing but build output". A `grep -v` on that check once reported
-"0 changes" over sixteen untracked files, and the session called itself ready
-to close.
+line takes no general reason. `git status --porcelain` prints nothing, or every
+path it prints is listed by name in the report as there before this session or
+another session's, and left alone: never "nothing of mine", never "nothing but
+build output", never a filter. A `grep -v` on that check once reported "0
+changes" over sixteen untracked files, and the session called itself ready to
+close.

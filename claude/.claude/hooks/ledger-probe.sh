@@ -8,15 +8,20 @@
 # happened. So the request is hung off SessionStart, which fires on its own,
 # once, as adr-probe.sh and agents-md-probe.sh hang theirs off events.
 #
-# It is silent in a repo with its own .claude/skills/wrap-up. That skill keeps
-# its ledger where its repo's instructions say (telik's CLAUDE.md names
-# .bin/ledger.<session id>), and two ledger rules in one context compete.
-# ledger.sh project-skill makes that call, so the probe and the skill's own
-# hand-over can never disagree about which repos have one.
+# It is silent only where the repo asks for a ledger of its own from an
+# always-loaded file (telik's CLAUDE.md names .bin/ledger.<session id>), since
+# two ledger rules in one context compete; ledger.sh repo-ledger makes that
+# call. A repo with its own wrap-up and no such line still gets the request:
+# a first version stayed quiet wherever a repo had a wrap-up, and in andrei.md
+# (ledger asked for only in the skill body, read at the end) and framestep (no
+# ledger) no session was ever asked for one. The skill's hand-over reads this
+# ledger as well as the repo's, so items recorded here are never lost to it.
 #
 # On a resume or after a compaction SessionStart fires again with the same
 # session ID; the probe then says how many items are already open, since the
-# conversation that recorded them may no longer be in context.
+# conversation that recorded them may no longer be in context. A /clear starts
+# a new session ID, and with it an empty ledger: what the old ID recorded is
+# out of this one's count, a known gap.
 #
 # It writes NO files: ledger.sh creates the ledger on the first line taken.
 # It must always exit 0. A SessionStart hook that fails is noise at the top of
@@ -43,7 +48,7 @@ ledger="${LEDGER_SH:-$HOME/.claude/skills/wrap-up/ledger.sh}"
 cwd=$(field cwd)
 [ -n "$cwd" ] && [ -d "$cwd" ] || cwd="$PWD"
 
-sh "$ledger" project-skill "$cwd" >/dev/null 2>&1 && exit 0
+sh "$ledger" repo-ledger "$cwd" >/dev/null 2>&1 && exit 0
 
 sid=$(field session_id)
 [ -n "$sid" ] || sid=${CLAUDE_CODE_SESSION_ID:-}

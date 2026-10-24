@@ -34,11 +34,20 @@ breaks.
 The ledger lives at `$XDG_STATE_HOME/claude/ledger/<session id>`. The
 scratchpad is under `/tmp` and a reboot empties it while the session survives;
 a file in the worktree needs a gitignore entry no generic tool can count on.
-`ledger-probe.sh` asks for it at SessionStart and is silent wherever
-`project-skill` finds a repo's own wrap-up, since that repo's instructions name
-their own ledger (telik's `.bin/ledger.<id>`) and two ledger rules in one
-context compete. Both questions go through the one script, so the probe and the
-skill cannot disagree about which repos have their own.
+`ledger-probe.sh` asks for it at SessionStart. It is silent only where the
+repo asks for its own ledger from an always-loaded file (`ledger.sh
+repo-ledger`), since two ledger rules in one context compete; today that is
+telik, whose `CLAUDE.md` names `.bin/ledger.<id>`. Having a wrap-up of its own
+is not enough: andrei.md asks for a ledger only in its skill body, which is read
+at the end, and framestep keeps none, so the probe is the only request a session
+there gets. The first version stayed quiet in all three, and its review caught
+it.
+
+The probe reads the session's starting directory and the skill reads wherever
+the session has since `cd`'d to, so the two can choose differently: a session
+that starts outside telik and moves into it records here and wraps up with
+telik's skill. The hand-over therefore always reads this ledger too, alongside
+whatever the repo's file names.
 
 ## Considered Options
 
@@ -56,3 +65,6 @@ A project skill read through the hand-over gets none of the loader's
 substitutions (`${CLAUDE_SKILL_DIR}`, `$ARGUMENTS`); the hand-over says to read
 `${CLAUDE_SKILL_DIR}` as that file's directory. None of the three uses any
 today.
+
+A `/clear` starts a new session ID and so an empty ledger; what the old ID
+recorded drops out of the count. Known and unhandled.
