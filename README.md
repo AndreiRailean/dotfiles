@@ -59,6 +59,13 @@ hooks it registers, and the skills under `skills/`. Only those paths are
 symlinked into `~/.claude`; the rest of that directory (state, sessions,
 history) is left alone.
 
+One of those skills, `wrap-up`, shares its name with the wrap-up some repos
+write for themselves, and a personal skill wins that clash. So its first step
+hands over to the repo's own `.claude/skills/wrap-up` when there is one, and
+`ledger-probe.sh`, which asks each session to keep the ledger the wrap-up
+reads, stays quiet in those repos. See
+[docs/adr/20261024-global-wrap-up-shadows-and-hands-over.md](docs/adr/20261024-global-wrap-up-shadows-and-hands-over.md).
+
 Not to be confused with this repo's own root `CLAUDE.md`, which is not stowed
 anywhere. Since 2.1.277 Claude Code loads `AGENTS.md` on its own, but only
 when no `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` switches that
