@@ -37,7 +37,9 @@ done
 # Wired into the package machinery
 grep -Eq 'for pkg in .*\bherdr\b' "$REPO/install.sh" && pass "install.sh stows herdr" || fail "install.sh stows herdr"
 grep -Eq 'PACKAGES=.*\bherdr\b' "$REPO/doctor.sh" && pass "doctor.sh scans herdr" || fail "doctor.sh scans herdr"
-grep -q 'herdr.dev/install.sh' "$REPO/install.sh" && pass "install.sh bootstraps herdr" || fail "install.sh bootstraps herdr"
+grep -q 'update.sh" --missing' "$REPO/install.sh" && grep -q 'DEFAULT_TOOLS=.*\bherdr\b' "$REPO/update.sh" \
+  && pass "install.sh bootstraps herdr through update.sh" || fail "install.sh bootstraps herdr through update.sh"
+grep -q 'herdr.dev/install.sh' "$REPO/update.sh" && pass "update.sh knows herdr's installer" || fail "update.sh knows herdr's installer"
 
 # Scripts still parse
 bash -n "$REPO/install.sh" && pass "install.sh parses" || fail "install.sh parses"

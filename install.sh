@@ -13,10 +13,9 @@ cd "$DOTFILES_DIR"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
-# ~/.local/bin is where several installers below drop binaries, and nothing
-# else creates it on a fresh Mac. Starship's installer refuses a -b dir that
-# doesn't exist ("does not appear to be a directory") rather than creating it,
-# and path.sh only puts the dir on PATH if it exists at shell startup.
+# ~/.local/bin is where update.sh and several installers below drop binaries,
+# and nothing else creates it on a fresh Mac. path.sh only puts the dir on PATH
+# if it exists at shell startup, so it has to be there before the first shell.
 mkdir -p "$HOME/.local/bin"
 
 # ── OS / environment detection ───────────────────────────────
@@ -435,42 +434,18 @@ if [ "$OS" = "Darwin" ] && [ ! -d /Applications/Ghostty.app ]; then
   fi
 fi
 
-# ── Starship ─────────────────────────────────────────────────
-if ! command -v starship &>/dev/null; then
-  echo "Installing Starship..."
-  # official installer; -y skips the confirm prompt, BIN_DIR keeps it in ~/.local/bin
-  curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" \
-    || pkg_install starship \
-    || echo "!! Starship install failed — install manually: https://starship.rs/installing"
-fi
+# ── Tools no package manager looks after ─────────────────────
+# Starship and herdr (and, where you add them, deno, fnm, Claude Code and
+# lazygit) come from update.sh, the one place that knows where each comes from.
+# --missing installs only what's absent, so re-running this script never
+# upgrades anything; `./update.sh --apply` does that when you choose to. Not
+# fatal: a tool that fails to install is reported and the rest carries on.
+"$DOTFILES_DIR/update.sh" --missing || echo "!! some tools failed to install — see above, then run ./update.sh"
 
-# ── herdr (agent-aware terminal multiplexer) ─────────────────
-# Static, self-updating binary (`herdr update`); not in distro repos. On macOS
-# with Homebrew it comes from brew, which also ships a launchd service for the
-# server (started further down). Elsewhere the official installer drops it in
-# ~/.local/bin.
+# On macOS, update.sh installs herdr from Homebrew; brew services needs to know.
 HERDR_BREW=0
-if [ "$OS" = "Darwin" ] && command -v brew &>/dev/null; then
-  if brew list --formula herdr &>/dev/null; then
-    HERDR_BREW=1
-  else
-    echo "Installing herdr (Homebrew)..."
-    brew install herdr && HERDR_BREW=1 || echo "!! brew install herdr failed — falling back to the official installer"
-  fi
-  # A copy from the official installer (a run of this script before herdr came
-  # from brew) shadows brew's, since ~/.local/bin precedes /opt/homebrew/bin on
-  # PATH — and `herdr update` / `brew upgrade` then each update a different
-  # binary, so the two drift apart. brew owns herdr on this machine now.
-  if [ "$HERDR_BREW" -eq 1 ] && [ -f "$HOME/.local/bin/herdr" ] && [ ! -L "$HOME/.local/bin/herdr" ]; then
-    rm -f "$HOME/.local/bin/herdr"
-    hash -r
-    echo "Removed ~/.local/bin/herdr — superseded by Homebrew's herdr"
-  fi
-fi
-if ! command -v herdr &>/dev/null; then
-  echo "Installing herdr..."
-  curl -fsSL https://herdr.dev/install.sh | sh \
-    || echo "!! herdr install failed — install manually: https://herdr.dev"
+if [ "$OS" = "Darwin" ] && command -v brew &>/dev/null && brew list --formula herdr &>/dev/null; then
+  HERDR_BREW=1
 fi
 
 # Keep the herdr server running from login (Homebrew's launchd service), so
@@ -723,5 +698,10 @@ if [ -x "$DOTFILES_DIR/doctor.sh" ]; then
   echo ""
   "$DOTFILES_DIR/doctor.sh" || true
 fi
+
+# ── Tool versions ────────────────────────────────────────────
+# Report-only, and soft offline. Upgrading is ./update.sh --apply.
+echo ""
+"$DOTFILES_DIR/update.sh" || true
 
 echo "Done. Restart your terminal (and 'exec \$SHELL') to load Starship."
