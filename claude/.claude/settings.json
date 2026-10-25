@@ -87,6 +87,6 @@
   "skipWorkflowUsageWarning": true,
   "theme": "auto",
   "preferredNotifChannel": "terminal_bell",
-  "skipAutoPermissionPrompt": true,
-  "switchModelsOnFlag": true
+  "switchModelsOnFlag": true,
+  "skipAutoPermissionPrompt": true
 }
