@@ -78,5 +78,10 @@ reason.
   stub in `tests/test-update.sh`.
 - Every `install.sh` run now ends with network lookups. They time out and
   fail soft, so a machine without a network still finishes.
+- Installing starship, deno and fnm uses GitHub's `releases/latest/download`
+  links rather than the API, so the API's limit of 60 unauthenticated requests
+  an hour can't block an install. lazygit's asset names include the version,
+  so installing it still needs an API lookup. The report always needs the API
+  for latest versions, and a lookup that fails shows as unknown.
 
 Landed in 9a8f624 and 48d6216.
