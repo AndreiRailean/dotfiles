@@ -32,6 +32,10 @@ OPTIONAL_TOOLS="deno fnm claude lazygit"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 BIN="$HOME/.local/bin"
+# owner() compares resolved paths, so $HOME must be resolved too: a symlinked
+# home (/home -> /data/home) or a trailing slash would otherwise make every
+# copy under it look like someone else's, and nothing would ever upgrade.
+HOME_REAL="$(cd "$HOME" 2>/dev/null && pwd -P || printf '%s' "${HOME%/}")"
 FNM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
 # A new shell finds these through path.sh and tools.sh. This script may be what
 # just created them, so it puts them on its own PATH up front.
@@ -92,7 +96,11 @@ claude_channel() {
 }
 
 # latest <tool>: the newest released version, or nothing when it can't be had.
+# Anything that isn't a version (a captive portal's HTML, say) counts as nothing.
 latest() {
+  latest_raw "$1" | tr -d '\r' | sed -n '1{/^[0-9][0-9.]*$/p;}'
+}
+latest_raw() {
   case "$1" in
     starship) github_latest starship/starship ;;
     deno)     github_latest denoland/deno ;;
@@ -120,9 +128,18 @@ version() {
   printf '%s\n' "${v%%[!0-9.]*}"
 }
 
-# older <a> <b>: is version a older than version b?
+# older <a> <b>: is version a older than version b? Field by field, numerically
+# — not `sort -V`, which macOS 12 and earlier lack, and whose absence would make
+# everything look up to date.
 older() {
-  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    n = split(a, x, "."); m = split(b, y, ".")
+    for (i = 1; i <= (n > m ? n : m); i++) {
+      if (x[i] + 0 < y[i] + 0) exit 0
+      if (x[i] + 0 > y[i] + 0) exit 1
+    }
+    exit 1
+  }'
 }
 
 # owner <tool>: self (under $HOME), brew, or system.
@@ -132,7 +149,7 @@ owner() {
   p="$(readlink -f "$p" 2>/dev/null || printf '%s' "$p")"
   case "$p" in
     */Cellar/*|/opt/homebrew/*|/home/linuxbrew/*) echo brew ;;
-    "$HOME"/*) echo self ;;
+    "$HOME_REAL"/*|"${HOME%/}"/*) echo self ;;
     *) echo system ;;
   esac
 }
@@ -146,10 +163,10 @@ sha256() {
 # matches the checksum. Pass "-" only where the project publishes none.
 download() {
   if [ -z "$3" ]; then
-    echo "!! no checksum for $1 — not installed"
+    echo "!! couldn't fetch the checksum for $1 (offline?) — not installed"
     return 1
   fi
-  fetch -o "$2" "$1" || { echo "!! download failed: $1"; return 1; }
+  fetch -o "$2" "$1" || { echo "!! download failed (offline?): $1"; return 1; }
   if [ "$3" != - ] && [ "$(sha256 "$2")" != "$3" ]; then
     echo "!! checksum mismatch for $1 — not installed"
     return 1
@@ -173,17 +190,26 @@ dest() {
 
 unsupported() { echo "!! no $1 release for $OS/$ARCH — install it by hand"; return 1; }
 
+# starship, deno and fnm name their release assets without a version, so they
+# come from GitHub's releases/latest/download redirect. That isn't the API, so
+# its 60-an-hour unauthenticated limit — easy to hit behind a shared NAT or in
+# CI — can't stop an install. lazygit's asset names carry the version, so it
+# still needs the lookup.
+
 install_starship() {
   local t a u
+  # musl on Linux, as starship's own installer chooses: the static build runs
+  # on an old-glibc server, where the gnu one dies with "GLIBC_x.y not found".
   case "$OS/$ARCH" in
-    Linux/x86_64)              t=x86_64-unknown-linux-gnu ;;
+    Linux/x86_64)              t=x86_64-unknown-linux-musl ;;
     Linux/aarch64|Linux/arm64) t=aarch64-unknown-linux-musl ;;
+    Linux/armv7l|Linux/armv6l) t=arm-unknown-linux-musleabihf ;;
     Darwin/arm64)              t=aarch64-apple-darwin ;;
     Darwin/x86_64)             t=x86_64-apple-darwin ;;
     *) unsupported starship; return 1 ;;
   esac
   a="starship-$t.tar.gz"
-  u="https://github.com/starship/starship/releases/download/v$1"
+  u="https://github.com/starship/starship/releases/latest/download"
   download "$u/$a" "$TMP/$a" "$(fetch "$u/$a.sha256" 2>/dev/null | awk '{ print $1 }')" &&
     tar -xzf "$TMP/$a" -C "$TMP" starship &&
     place "$TMP/starship" "$(dest starship "$BIN")"
@@ -199,7 +225,7 @@ install_deno() {
     *) unsupported deno; return 1 ;;
   esac
   a="deno-$t.zip"
-  u="https://github.com/denoland/deno/releases/download/v$1"
+  u="https://github.com/denoland/deno/releases/latest/download"
   download "$u/$a" "$TMP/$a" "$(fetch "$u/$a.sha256sum" 2>/dev/null | awk '{ print $1 }')" &&
     unzip -oq "$TMP/$a" deno -d "$TMP" &&
     place "$TMP/deno" "$(dest deno "$BIN")"
@@ -215,7 +241,7 @@ install_fnm() {
   esac
   # fnm publishes no checksums, so this rests on HTTPS from GitHub alone. Its
   # home is FNM_DIR, which tools.sh puts on PATH and hands to `fnm env`.
-  download "https://github.com/Schniz/fnm/releases/download/v$1/$a" "$TMP/$a" - &&
+  download "https://github.com/Schniz/fnm/releases/latest/download/$a" "$TMP/$a" - &&
     unzip -oq "$TMP/$a" fnm -d "$TMP" &&
     place "$TMP/fnm" "$(dest fnm "$FNM_DIR")"
 }
@@ -264,18 +290,25 @@ herdr_from_brew() {
   fi
 }
 
+# runs <tool>: does the tool now report a version? A binary can install cleanly
+# and still not run (wrong libc, wrong arch); without this check it would look
+# absent, so every install.sh run would reinstall it and say nothing.
+runs() {
+  hash -r
+  [ -n "$(version "$1")" ] && return 0
+  echo "!! $1 was installed but \`$1 --version\` doesn't work on this machine"
+  return 1
+}
+
 # install_tool <tool>: put an absent tool on this machine.
 install_tool() {
   local v=""
-  case "$1" in
-    herdr|claude) ;;
-    *)
-      v="$(latest "$1")"
-      [ -n "$v" ] || { echo "!! can't find the latest $1 release (offline?) — not installed"; return 1; }
-      ;;
-  esac
+  if [ "$1" = lazygit ]; then
+    v="$(latest lazygit)"
+    [ -n "$v" ] || { echo "!! can't find the latest lazygit release (offline?) — not installed"; return 1; }
+  fi
   echo "Installing $1${v:+ $v}..."
-  "install_$1" "$v" && hash -r
+  "install_$1" "$v" && runs "$1"
 }
 
 HERDR_UPDATED=0
@@ -287,8 +320,7 @@ upgrade_tool() {
     claude) claude update ;;
     deno)   deno upgrade ;;
     *)      "install_$1" "$2" ;;
-  esac
-  hash -r
+  esac && runs "$1"
 }
 
 # ── Main ─────────────────────────────────────────────────────
@@ -357,12 +389,12 @@ fi
 # Upgrades the package managers own are theirs to run; just say they're waiting.
 if [ "$MODE" = report ] || [ "$MODE" = apply ]; then
   if command -v brew >/dev/null 2>&1; then
-    n="$(HOMEBREW_NO_AUTO_UPDATE=1 brew outdated --quiet 2>/dev/null | wc -l | tr -d ' ')"
-    if [ "$n" -gt 0 ]; then echo "  brew: $n outdated — brew upgrade"; fi
+    n="$(HOMEBREW_NO_AUTO_UPDATE=1 brew outdated --quiet 2>/dev/null | wc -l | tr -d ' ')" || n=0
+    if [ "${n:-0}" -gt 0 ]; then echo "  brew: $n outdated — brew upgrade"; fi
   fi
   if command -v apt >/dev/null 2>&1; then
-    n="$(apt list --upgradable 2>/dev/null | grep -c 'upgradable from' || true)"
-    if [ "$n" -gt 0 ]; then echo "  apt: $n upgradable as of the last apt update — sudo apt upgrade"; fi
+    n="$(apt list --upgradable 2>/dev/null | grep -c 'upgradable from')" || n=0
+    if [ "${n:-0}" -gt 0 ]; then echo "  apt: $n upgradable as of the last apt update — sudo apt upgrade"; fi
   fi
 fi
 

@@ -21,7 +21,9 @@ T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT INT TERM
 mkdir -p "$T/util" "$T/sys" "$T/net" "$T/build"
 
-for c in bash sh env awk sed grep head tr wc sort mktemp rm mkdir cp mv chmod \
+# No `sort`: version comparison must not depend on `sort -V`, which macOS 12
+# and earlier lack.
+for c in bash sh env awk sed grep head tr wc mktemp rm mkdir cp mv chmod ln \
          tar gzip unzip sha256sum shasum readlink dirname basename cat uname printf; do
   # Only a path: command -v names a function or alias by its bare name.
   p="$(command -v "$c" 2>/dev/null)" || continue
@@ -137,11 +139,27 @@ assert_not_contains "$log" "herdr.dev" "--missing looks nothing up for a tool th
 assert_not_contains "$log" "lazygit" "--missing leaves optional tools alone"
 assert_not_contains "$out" "Tools not managed" "--missing prints no report"
 
-# Offline there's no version to fetch, so nothing is installed — and it says so.
+# Offline the download fails, so nothing is installed — and it says so.
 fresh; rm "$H/.local/bin/starship"; touch "$T/net/offline"
 out="$(run --missing)"; rc=$?
 [ "$rc" -ne 0 ] && pass "--missing offline exits non-zero" || fail "--missing offline exits non-zero"
-assert_contains "$out" "offline?" "--missing offline says why nothing was installed"
+assert_contains "$out" "(offline?)" "--missing offline says why nothing was installed"
+
+# starship installs from releases/latest/download, not through the rate-limited
+# API, so an install needs no version lookup at all.
+assert_not_contains "$(cat "$T/curl.log")" "api.github.com" "installing starship makes no API call"
+
+# A binary that installs but can't run (wrong libc, say) is a failure, not a
+# silent success that every later install.sh run repeats.
+fresh; rm "$H/.local/bin/starship"
+mkdir -p "$T/broken"; printf '#!/bin/sh\nexit 1\n' >"$T/broken/starship"; chmod +x "$T/broken/starship"
+cp "$T/net/starship.tar.gz" "$T/net/starship.tar.gz.good"; cp "$T/net/starship.sha" "$T/net/starship.sha.good"
+tar -czf "$T/net/starship.tar.gz" -C "$T/broken" starship
+sha "$T/net/starship.tar.gz" >"$T/net/starship.sha"
+out="$(run --missing)"; rc=$?
+mv "$T/net/starship.tar.gz.good" "$T/net/starship.tar.gz"; mv "$T/net/starship.sha.good" "$T/net/starship.sha"
+[ "$rc" -ne 0 ] && pass "a binary that doesn't run fails the install" || fail "a binary that doesn't run fails the install"
+assert_contains "$out" "doesn't work on this machine" "a binary that doesn't run is reported"
 
 # ── a checksum mismatch is never installed ────────────────────
 fresh; rm "$H/.local/bin/starship"
@@ -162,6 +180,34 @@ assert_contains "$(cat "$T/calls" 2>/dev/null)" "herdr update" "--apply upgrades
 assert_contains "$out" "Retest the worktree auto-layout" "an herdr upgrade prints the retest reminder"
 assert_contains "$("$T/sys/lazygit" --version)" "version=0.57.0" "--apply leaves the system lazygit alone"
 [ ! -e "$H/.local/bin/lazygit" ] && pass "--apply installs no optional tool" || fail "--apply installs no optional tool"
+
+# ── versions compare numerically ──────────────────────────────
+fresh; tool "$H/.local/bin/starship" starship 1.9.0; echo 1.10.0 >"$T/net/starship"
+out="$(run)"
+assert_contains "$out" "1.10.0 available" "1.9.0 is older than 1.10.0"
+tool "$H/.local/bin/starship" starship 1.10.0; echo 1.9.0 >"$T/net/starship"
+out="$(run)"
+assert_contains "$out" "starship  1.10.0     up to date" "a newer local version is never offered a downgrade"
+echo 1.1.0 >"$T/net/starship"
+
+# ── a symlinked or slash-terminated HOME is still "under \$HOME" ─
+fresh; ln -s "$H" "$T/home-link"
+out="$(HOME="$T/home-link" PATH="$T/sys:$T/util" "$BASH_BIN" "$UPDATE" 2>&1)"
+assert_contains "$out" "1.1.0 available — ./update.sh --apply" "a symlinked HOME still owns ~/.local/bin"
+out="$(HOME="$H/" PATH="$T/sys:$T/util" "$BASH_BIN" "$UPDATE" 2>&1)"
+assert_contains "$out" "1.1.0 available — ./update.sh --apply" "a HOME with a trailing slash still owns ~/.local/bin"
+rm "$T/home-link"
+
+# ── a failing package-manager query doesn't fail the report ───
+fresh; printf '#!/bin/sh\nexit 1\n' >"$T/sys/brew"; chmod +x "$T/sys/brew"
+out="$(run)"; rc=$?
+assert_eq "$rc" 0 "the report exits 0 when brew outdated fails"
+
+# ── a latest "version" that isn't one is ignored ──────────────
+fresh; printf '<html>captive portal</html>\n' >"$T/net/claude"; tool "$H/.local/bin/claude" claude 2.1.0
+out="$(run)"
+assert_contains "$out" "claude    2.1.0      latest unknown" "HTML in place of a version counts as unknown"
+rm "$T/net/claude"
 
 # ── --add: installs an optional tool, verified ────────────────
 fresh; rm "$T/sys/lazygit"
