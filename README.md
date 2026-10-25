@@ -25,10 +25,45 @@ Then restart your shell (or `exec "$SHELL"`).
    left intact.
 4. Seed the per-machine files (`~/.config/git/local`, `~/.config/shell/local.sh`)
    from their `*.example` templates — never overwriting an existing one.
-5. Best-effort install Starship, a Nerd Font (the `font-monaspice-nerd-font`
-   Homebrew cask on macOS; a release download into `~/.local/share/fonts`
-   elsewhere), Ghostty (macOS), and (on WSL) `win32yank` for clipboard
-   bridging. Terminal font selection is a manual step it prints.
+5. Best-effort install a Nerd Font (the `font-monaspice-nerd-font` Homebrew
+   cask on macOS; a release download into `~/.local/share/fonts` elsewhere),
+   Ghostty (macOS), and (on WSL) `win32yank` for clipboard bridging. Terminal
+   font selection is a manual step it prints.
+6. Install Starship and herdr through `update.sh --missing`, and end with
+   `update.sh`'s version report (see [Updating tools](#updating-tools)).
+
+## Updating tools
+
+`install.sh` only installs what's missing. It never upgrades, so re-running it
+is always safe. Upgrading the tools that no package manager looks after is
+`update.sh`'s job:
+
+```sh
+./update.sh                # installed vs latest; changes nothing
+./update.sh --apply        # install what's missing, upgrade what's behind
+./update.sh --add deno     # put an optional tool on this machine
+```
+
+| Tool | Default or optional | Comes from | Upgraded by |
+| ---- | ------------------- | ---------- | ----------- |
+| starship | default | GitHub release, sha256-checked | a fresh release download |
+| herdr | default | Homebrew on macOS, else herdr's installer | `herdr update` |
+| deno | optional | GitHub release, sha256-checked | `deno upgrade` |
+| fnm | optional | GitHub release (none published a checksum) | a fresh release download |
+| claude | optional | Claude Code's installer | `claude update` |
+| lazygit | optional | GitHub release, sha256-checked | a fresh release download |
+
+Optional tools need no per-machine list. A tool on `PATH` is reported and
+upgraded, so installing one is the opt-in.
+
+Only a copy under `$HOME` is upgraded. A tool that apt, Homebrew or pacman
+installed is reported with its owner and left to that package manager, because
+a second copy on `PATH` would drift from the first. The report ends with how
+many apt or Homebrew upgrades are waiting, but it never runs them.
+
+Every lookup fails soft: offline, latest versions show as unknown and nothing
+changes. After herdr upgrades, `update.sh` reminds you to retest the worktree
+auto-layout described at the top of `herdr/.config/herdr/config.toml`.
 
 ## Layout
 
