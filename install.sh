@@ -261,18 +261,6 @@ EOF
 }
 seed_global_gitconfig
 
-if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
-  echo "Installing win32yank for clipboard bridge..."
-  if curl -fsSLo /tmp/win32yank.zip \
-      https://github.com/equalsraf/win32yank/releases/latest/download/win32yank-x64.zip 2>/dev/null; then
-    unzip -oq /tmp/win32yank.zip win32yank.exe -d "$HOME/.local/bin/"
-    chmod +x "$HOME/.local/bin/win32yank.exe"
-    rm /tmp/win32yank.zip
-  else
-    echo "!! win32yank download failed — clipboard sync in nvim won't work until installed"
-  fi
-fi
-
 # ── CLI tools (best-effort; each is optional) ────────────────
 # ensure_tool <package> <cmd>...: install <package> unless one of <cmd> is
 # already on PATH. (bat is `batcat` on Debian/Ubuntu, `bat` elsewhere.)
@@ -299,6 +287,22 @@ ensure_tool rsync rsync
 ensure_tool git-delta delta
 # fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
 if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
+# unzip: update.sh unpacks fnm and deno with it, and the Nerd Font and
+# win32yank below arrive as zips. Ubuntu's cloud images ship without it, so
+# on a fresh VM fnm's install failed. macOS ships one.
+ensure_tool unzip unzip
+
+if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
+  echo "Installing win32yank for clipboard bridge..."
+  if curl -fsSLo /tmp/win32yank.zip \
+      https://github.com/equalsraf/win32yank/releases/latest/download/win32yank-x64.zip 2>/dev/null; then
+    unzip -oq /tmp/win32yank.zip win32yank.exe -d "$HOME/.local/bin/"
+    chmod +x "$HOME/.local/bin/win32yank.exe"
+    rm /tmp/win32yank.zip
+  else
+    echo "!! win32yank download failed — clipboard sync in nvim won't work until installed"
+  fi
+fi
 
 # ── Neovim ───────────────────────────────────────────────────
 # nvim is EDITOR/VISUAL and has a stowed config, so a fresh machine needs it.
