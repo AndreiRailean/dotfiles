@@ -117,7 +117,7 @@ fresh
 out="$(run)"; rc=$?
 assert_eq "$rc" 0 "the report exits 0"
 assert_contains "$out" "1.1.0 available — ./update.sh --apply" "an old starship under \$HOME is offered an upgrade"
-assert_contains "$out" "herdr     0.9.5      up to date" "a current herdr is up to date"
+assert_contains "$out" "herdr     0.9.5      up to date (optional)" "a current herdr is up to date, and optional"
 assert_contains "$out" "0.66.2 available (optional) — from the system package manager" "a system lazygit is left to its package manager"
 assert_contains "$out" "lazygit   0.57.0" "lazygit's version, not the git version it also prints"
 assert_contains "$out" "./update.sh --add deno" "an absent optional tool says how to add it"
@@ -137,6 +137,13 @@ assert_contains "$("$H/.local/bin/starship" --version 2>&1)" "1.1.0" "--missing 
 log="$(cat "$T/curl.log")"
 assert_not_contains "$log" "herdr.dev" "--missing looks nothing up for a tool that is present"
 assert_not_contains "$log" "lazygit" "--missing leaves optional tools alone"
+
+# herdr is optional: an absent one stays absent until it's added.
+fresh; rm "$H/.local/bin/herdr"
+out="$(run --missing)"; rc=$?
+assert_eq "$rc" 0 "--missing exits 0 with herdr absent"
+assert_not_contains "$(cat "$T/curl.log" 2>/dev/null)" "herdr.dev" "--missing doesn't install an absent herdr"
+assert_contains "$(run)" "not installed (optional) — ./update.sh --add herdr" "an absent herdr says how to add it"
 assert_not_contains "$out" "Tools not managed" "--missing prints no report"
 
 # Offline the download fails, so nothing is installed — and it says so.
@@ -177,7 +184,6 @@ out="$(run --apply)"; rc=$?
 assert_eq "$rc" 0 "--apply exits 0"
 assert_contains "$("$H/.local/bin/starship" --version)" "1.1.0" "--apply upgrades starship in place"
 assert_contains "$(cat "$T/calls" 2>/dev/null)" "herdr update" "--apply upgrades herdr with herdr update"
-assert_contains "$out" "Retest the worktree auto-layout" "an herdr upgrade prints the retest reminder"
 assert_contains "$("$T/sys/lazygit" --version)" "version=0.57.0" "--apply leaves the system lazygit alone"
 [ ! -e "$H/.local/bin/lazygit" ] && pass "--apply installs no optional tool" || fail "--apply installs no optional tool"
 
@@ -208,6 +214,41 @@ fresh; printf '<html>captive portal</html>\n' >"$T/net/claude"; tool "$H/.local/
 out="$(run)"
 assert_contains "$out" "claude    2.1.0      latest unknown" "HTML in place of a version counts as unknown"
 rm "$T/net/claude"
+
+# ── macOS: herdr comes from Homebrew, but only where it's wanted ─
+# mac: stub uname as a Mac and brew as one without herdr. `brew install herdr`
+# puts a herdr on PATH, as the real one does.
+mac() {
+  printf '#!/bin/sh\ncase "$1" in -m) echo arm64 ;; *) echo Darwin ;; esac\n' >"$T/sys/uname"
+  cat >"$T/sys/brew" <<EOF
+#!/bin/sh
+echo "brew \$*" >>"$T/calls"
+case "\$1" in
+  list) [ -e "$T/sys/herdr" ] ;;
+  install) printf '#!/bin/sh\\necho "herdr 0.9.5"\\n' >"$T/sys/herdr"; chmod +x "$T/sys/herdr" ;;
+esac
+EOF
+  chmod +x "$T/sys/uname" "$T/sys/brew"
+}
+fresh; rm "$H/.local/bin/herdr"; mac
+run --missing >/dev/null
+assert_not_contains "$(cat "$T/calls" 2>/dev/null)" "brew install herdr" "macOS --missing leaves an absent herdr alone"
+run --add deno >/dev/null
+assert_not_contains "$(cat "$T/calls" 2>/dev/null)" "brew install herdr" "macOS --add of another tool leaves herdr alone"
+out="$(run --add herdr)"
+assert_contains "$(cat "$T/calls" 2>/dev/null)" "brew install herdr" "macOS --add herdr installs it from Homebrew"
+assert_contains "$out" "herdr 0.9.5 installed from Homebrew" "--add herdr says where it came from"
+assert_contains "$out" "re-run ./install.sh" "--add herdr says how to start its brew service"
+assert_not_contains "$out" "already installed" "--add herdr doesn't call a fresh install 'already installed'"
+
+# A herdr from the official installer is handed to Homebrew, and install.sh
+# (the one running --missing) starts the service, so no hint is printed.
+fresh; mac
+out="$(run --missing)"
+assert_contains "$(cat "$T/calls" 2>/dev/null)" "brew install herdr" "macOS --missing moves an installed herdr to Homebrew"
+[ ! -e "$H/.local/bin/herdr" ] && pass "the ~/.local/bin copy that shadowed brew's is removed" \
+  || fail "the ~/.local/bin copy that shadowed brew's is removed"
+assert_not_contains "$out" "re-run ./install.sh" "--missing, run by install.sh, doesn't tell it to re-run itself"
 
 # ── --add: installs an optional tool, verified ────────────────
 fresh; rm "$T/sys/lazygit"

@@ -23,6 +23,7 @@ herdr/.config/herdr/session-snapshots/
 # herdr's own data, not our config, and it differs per host by version.
 herdr/.config/herdr/release-notes.json
 
-# Python bytecode from running the herdr auto-layout daemon or py_compile.
+# Python bytecode. The herdr auto-layout daemon is gone, but a checkout that
+# byte-compiled it still holds a __pycache__ that must never be committed.
 __pycache__/
 *.pyc

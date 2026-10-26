@@ -7,7 +7,7 @@
 # `set -euo pipefail`, so that refusal doesn't just skip one package — it kills
 # the whole install at the stow loop, and EVERY later step is silently skipped:
 # the remaining packages, the lazygit binary install (since removed), the Nerd
-# Font, the auto-layout unit. The observed symptom was "install.sh doesn't install the
+# Font, the auto-layout unit (since removed). The observed symptom was "install.sh doesn't install the
 # right lazygit version": in fact it never reached that block at all.
 #
 # The trigger is ordinary. Tools write a config on first run, so any machine

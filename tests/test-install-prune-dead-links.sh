@@ -191,6 +191,8 @@ case "$(awk '/^prune_retired_roots\(\)/,/^}/' "$INST")" in
 esac
 assert_contains "$(grep -m1 '^RETIRED_ROOTS=' "$INST")" ".config/lazygit" \
   "lazygit's old root is listed as retired"
+assert_contains "$(grep -m1 '^RETIRED_ROOTS=' "$INST")" ".config/systemd" \
+  "herdr's old systemd root is listed as retired"
 RFNS="$(awk '/^link_target_abs\(\)/,/^}/' "$INST")
 $(awk '/^prune_retired_roots\(\)/,/^}/' "$INST")"
 
@@ -198,9 +200,13 @@ R="$T/retired"
 mkdir -p "$R/home/dotfiles" "$R/home/.config/old/sub" "$R/home/.config/mixed"
 ln -s "../../dotfiles/old/.config/old/old.yml" "$R/home/.config/old/old.yml"
 ln -s "../../../dotfiles/old/.config/old/sub/x" "$R/home/.config/old/sub/x"
+# `systemctl enable` links by absolute path (default.target.wants/<unit>).
+ln -s "$R/home/dotfiles/old/.config/old/sub/abs.service" "$R/home/.config/old/sub/abs.service"
 ln -s "../../dotfiles/old/.config/mixed/m.yml" "$R/home/.config/mixed/m.yml"
 printf 'mine\n' >"$R/home/.config/mixed/notes.txt"
 ln -s "/nonexistent/elsewhere" "$R/home/.config/mixed/foreign"
+# Another tool's empty directory (a systemd drop-in dir, say) under a root.
+mkdir -p "$R/home/.config/mixed/foo.service.d"
 run_retired() {
   ( cd "$R/home/dotfiles" && HOME="$R/home" DOTFILES_DIR="$R/home/dotfiles" bash -c "$RFNS
     RETIRED_ROOTS='.config/old .config/mixed .config/absent'
@@ -216,6 +222,8 @@ assert_eq "$(cat "$R/home/.config/mixed/notes.txt" 2>/dev/null)" "mine" \
   "retired root: a real file is left alone, and so is its directory"
 [ -L "$R/home/.config/mixed/foreign" ] && pass "retired root: a link aimed outside the repo is left alone" \
   || fail "retired root: a link aimed outside the repo is left alone"
+[ -d "$R/home/.config/mixed/foo.service.d" ] && pass "retired root: an empty directory that held none of our links is left alone" \
+  || fail "retired root: an empty directory that held none of our links is left alone"
 assert_not_contains "$(run_retired)" "Removed" "retired roots: a second pass prunes nothing further"
 
 # ── doctor.sh should name the fix, not just the symptom ────────

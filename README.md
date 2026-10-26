@@ -29,8 +29,9 @@ Then restart your shell (or `exec "$SHELL"`).
    cask on macOS; a release download into `~/.local/share/fonts` elsewhere),
    Ghostty (macOS), and (on WSL) `win32yank` for clipboard bridging. Terminal
    font selection is a manual step it prints.
-6. Install Starship and herdr through `update.sh --missing`, and end with
-   `update.sh`'s version report (see [Updating tools](#updating-tools)).
+6. Install Starship through `update.sh --missing`, and end with `update.sh`'s
+   version report (see [Updating tools](#updating-tools)). herdr, Claude Code
+   and the other optional tools are added per machine with `update.sh --add`.
 
 ## Updating tools
 
@@ -47,7 +48,7 @@ is always safe. Upgrading the tools that no package manager looks after is
 | Tool | Default or optional | Comes from | Upgraded by |
 | ---- | ------------------- | ---------- | ----------- |
 | starship | default | GitHub release, sha256-checked | a fresh release download |
-| herdr | default | Homebrew on macOS, else herdr's installer | `herdr update` |
+| herdr | optional | Homebrew on macOS, else herdr's installer | `herdr update` |
 | deno | optional | GitHub release, sha256-checked | `deno upgrade` |
 | fnm | optional | GitHub release (none published a checksum) | a fresh release download |
 | claude | optional | Claude Code's installer | `claude update` |
@@ -62,8 +63,7 @@ a second copy on `PATH` would drift from the first. The report ends with how
 many apt or Homebrew upgrades are waiting, but it never runs them.
 
 Every lookup fails soft: offline, latest versions show as unknown and nothing
-changes. After herdr upgrades, `update.sh` reminds you to retest the worktree
-auto-layout described at the top of `herdr/.config/herdr/config.toml`.
+changes.
 
 ## Layout
 
@@ -81,8 +81,6 @@ claude/.claude/CLAUDE.md   ->  ~/.claude/CLAUDE.md
 claude/.claude/settings.json -> ~/.claude/settings.json
 claude/.claude/statusline-command.sh -> ~/.claude/statusline-command.sh
 herdr/.config/herdr/config.toml -> ~/.config/herdr/config.toml
-herdr/.config/herdr/scripts/    -> ~/.config/herdr/scripts/
-herdr/.config/systemd/user/     -> ~/.config/systemd/user/
 ```
 
 Everything is XDG-based (`~/.config`, `~/.local/share`, …).
@@ -350,9 +348,11 @@ agent a real persistent pane and surfaces working/blocked/done/idle state
 natively (what the tmux setup above approximates with hooks). It's the
 agent-focused driver; **tmux stays** for plain and SSH-only boxes.
 
-`install.sh` installs it with Homebrew on macOS (`brew install herdr`, then
-`brew services start herdr` so the server is up from login) and via the
-official installer elsewhere (`curl -fsSL https://herdr.dev/install.sh | sh`).
+It's optional: `./update.sh --add herdr` puts it on a machine. That uses
+Homebrew on macOS (`brew install herdr`; the next `install.sh` run then does
+`brew services start herdr` so the server is up from login) and the official
+installer elsewhere. Its config is stowed everywhere, which is harmless where
+herdr isn't installed.
 There's no version pin: `brew upgrade herdr` or `herdr update` keeps it
 current. If an earlier run left the official installer's copy in
 `~/.local/bin`, a macOS run removes it so brew's is the only one.
@@ -383,102 +383,14 @@ those are git-ignored so they're never committed and `doctor.sh` doesn't flag
 them as drift. If a machine already has a real `config.toml` there, `stow` will
 conflict — adopt it with `./doctor.sh --adopt` or remove it first.
 
-### Auto-layout for new worktrees
+### No auto-layout
 
-Every new git-worktree workspace gets the same treatment automatically:
+New worktrees open as herdr makes them: one tab, one shell. Until 2026-10-26 a
+background daemon arranged each one and started Claude Code in it. It was
+removed because typing `claude` costs less than a service on every machine, a
+retest after every herdr upgrade, and reliance on two API behaviours herdr
+doesn't document. herdr has no hook that runs a command when a worktree is
+created, so bringing it back means bringing back a daemon. See
+[the ADR](docs/adr/20261026-drop-herdr-autolayout.md) before you do.
 
-```
-┌─────────────────────────────────┐   tab 1: "claude"
-│ claude                          │   one pane, no split
-└─────────────────────────────────┘
-```
-
-One tab running Claude Code. Nothing else is opened: a shell beside it is a
-`prefix+v` away when it's wanted, and `DIRECTION` below brings back the
-automatic split.
-
-herdr has **no declarative hook** for this — there's no `on_worktree_create` in
-`config.toml`, and `herdr integration` only manages agent integrations. So
-`herdr/.config/herdr/scripts/herdr-autolayout` subscribes to the socket API's
-event stream instead, which keeps the native `prefix+shift+G` flow untouched and
-fires however the worktree was created (TUI, CLI, or API).
-
-**Or apply it by hand: `prefix+shift+L`.** Same code path, for a workspace that
-predates the daemon or one you've since rearranged. It's idempotent — a command
-is only sent if it isn't already running, and a split (when `DIRECTION` asks
-for one) only happens when the tab has one pane — so pressing it twice is a
-no-op. Two entry points, one
-implementation:
-
-    herdr-autolayout                  # daemon: arrange every new worktree
-    herdr-autolayout arrange [WS_ID]  # arrange one workspace now
-
-With no argument it targets the workspace it was invoked from, via the
-`HERDR_WORKSPACE_ID` that herdr exports into every pane — no API call, and
-correct even when the herdr client's focus is elsewhere.
-
-The binding is a `[[keys.command]]` of `type = "popup"` rather than `"pane"`: a
-popup is session-modal and doesn't alter the tab layout, and it doubles as a
-progress log since it stays up until the script finishes.
-
-There's deliberately no attempt to have the daemon *press* the shortcut.
-`pane.send_keys` targets a pane's program, not herdr's input layer, and
-registering a real plugin action (`plugin.action.invoke`) needs an undocumented
-plugin manifest. Calling the same function is simpler and works on an unfocused
-workspace.
-
-It runs as a systemd **user** unit (`herdr-autolayout.service`) on Linux and
-as a launchd agent (`dotfiles.herdr-autolayout`, in `~/Library/LaunchAgents/`)
-on macOS, both set up by `install.sh`; `doctor.sh` reports either one not
-running. The plist is generated rather than stowed, because launchd doesn't
-expand `~` or `$HOME`. Logs go to `$XDG_STATE_HOME/herdr/autolayout.log` — deliberately
-outside `~/.config/herdr/`, which `doctor.sh` treats as a managed tree.
-
-    systemctl --user status herdr-autolayout    # is it running?
-    systemctl --user restart herdr-autolayout   # after editing the script
-    launchctl print gui/$(id -u)/dotfiles.herdr-autolayout      # macOS: running?
-    launchctl kickstart -k gui/$(id -u)/dotfiles.herdr-autolayout # macOS: restart
-    tail -f ~/.local/state/herdr/autolayout.log
-
-Tunable by setting environment variables on the unit (`systemctl --user edit
-herdr-autolayout`) — `HERDR_AUTOLAYOUT_` plus the names below. macOS has no
-equivalent yet: `install.sh` rewrites a plist that differs from what it
-generates, so a hand edit only lasts until the next install.
-
-| | |
-| --- | --- |
-| `LEFT_CMD` | left pane command (default `claude`; empty = plain shell) |
-| `RIGHT_CMD` | right pane command (default: none, just a shell) |
-| `MAIN_TAB` | first tab's label (default `claude`; empty keeps herdr's number) |
-| `FOCUS` | `left` (default) / `right` / `none`, after a split |
-| `DIRECTION` | `none` (default: no split) / `right` / `down` |
-| `RATIO` | split ratio, e.g. `0.5` |
-| `READY_SECS` | how long to wait for a shell prompt (default 90) |
-
-Four things worth knowing before touching it:
-
-- **Typing into a pane is the hard part.** `pane split` doesn't take a
-  `--command`, so commands are typed with
-  `pane send-text` — and text sent before the shell reaches its prompt is
-  echoed to the screen then discarded. Shell init here takes ~5s, so this bites
-  every time. `fg == shell_pid` does *not* mean ready (bash is its own
-  foreground group the instant it spawns); the daemon also waits for the pane to
-  have drawn something, then **verifies the process actually started** and
-  retries with a ctrl-u if it didn't.
-- **Each new worktree is a new directory, so Claude Code shows its "trust this
-  folder" prompt** the first time. Press enter; there's no way around it from
-  here.
-
-- **Subscribing replays recent `workspace_created` events.** Without a guard, a
-  restart would re-split workspaces you'd already arranged. The daemon only acts
-  on a workspace that still has exactly one tab and one pane, which makes it
-  idempotent — already-arranged and since-deleted workspaces are skipped.
-- **It leans on two undocumented API behaviours.** `events.wait` advertises
-  workspace matches in the schema but the server rejects them
-  (`unsupported_event_wait_match`), and `workspace_created` *is* delivered on a
-  subscription even though `SubscriptionEventKind` doesn't list it. A herdr
-  upgrade could change either. Failures are logged and the loop reconnects, so
-  the worst case is layouts quietly stop — never a broken herdr.
-- **The `herdr` package now also owns `~/.config/systemd`** (for the unit), so
-  `doctor.sh` scans it. A hand-added user unit there will show up as untracked
-  drift — adopt it or add it to `.gitignore`.
+`install.sh` stops a daemon an earlier run left behind, and prunes its links.

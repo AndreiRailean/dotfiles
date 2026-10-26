@@ -41,18 +41,11 @@ if [ "$ADOPT" -eq 0 ] && command -v nvim >/dev/null 2>&1 && command -v vim >/dev
   fi
 fi
 
-# ── herdr background services (report-only; never affects drift) ───
-# The auto-layout daemon fails soft by design — with it down, new worktrees
-# just open unarranged and herdr itself looks fine — so its absence has to be
-# looked for. install.sh starts it (launchd on macOS, a systemd user unit
-# elsewhere) and, where herdr came from Homebrew, the herdr server service.
+# ── herdr from Homebrew (report-only; never affects drift) ───
+# Where herdr came from Homebrew, install.sh starts its server as a brew
+# service; a stopped one only shows up at the next login, so look for it.
 if [ "$ADOPT" -eq 0 ] && command -v herdr >/dev/null 2>&1; then
   if [ "$(uname -s)" = "Darwin" ]; then
-    if ! launchctl print "gui/$(id -u)/dotfiles.herdr-autolayout" >/dev/null 2>&1; then
-      echo "▲ The herdr auto-layout launchd agent isn't loaded — new worktrees won't be arranged."
-      echo "    fix: re-run ./install.sh"
-      echo
-    fi
     if command -v brew >/dev/null 2>&1 && brew list --formula herdr >/dev/null 2>&1; then
       herdr_svc="$(brew services list 2>/dev/null | awk '$1 == "herdr" { print $2 }')"
       if [ "$herdr_svc" != "started" ]; then
@@ -66,12 +59,6 @@ if [ "$ADOPT" -eq 0 ] && command -v herdr >/dev/null 2>&1; then
         echo "    fix: re-run ./install.sh (removes the ~/.local/bin copy)"
         echo
       fi
-    fi
-  elif command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
-    if ! systemctl --user is-active --quiet herdr-autolayout.service; then
-      echo "▲ herdr-autolayout.service isn't running — new worktrees won't be arranged."
-      echo "    fix: re-run ./install.sh, or: systemctl --user enable --now herdr-autolayout.service"
-      echo
     fi
   fi
 fi

@@ -42,7 +42,7 @@ fi
 # stow refuses to link over a target that is a real file rather than a symlink
 # or a directory, and under `set -e` that refusal doesn't just skip the one
 # package — it aborts this whole script at the loop below, silently skipping
-# every later step (the remaining packages, the font, the auto-layout unit). The trigger is ordinary: tools write a config on first
+# every later step (the remaining packages, the font). The trigger is ordinary: tools write a config on first
 # run, so any machine that used a tool BEFORE this repo managed it has exactly
 # such a file sitting on the target. lazygit is the case that surfaced this —
 # it leaves an empty ~/.config/lazygit/config.yml on first launch — but
@@ -151,15 +151,19 @@ prune_dead_links() {
   done < <(owned_roots "$pkg")
 }
 
-# Roots of packages removed from the repo altogether. prune_dead_links only
-# visits packages that still exist, so a whole package's `git rm` would leave
-# its links dangling on every other machine. Same narrow rule — dangling and
-# pointing into this repo — and the root goes too once nothing else is in it,
-# since no package stows there any more. Binaries an old install put in
-# ~/.local/bin are left alone: they may still be in use.
-RETIRED_ROOTS=".config/lazygit"
+# Roots no package stows into any more: a package removed from the repo
+# altogether (lazygit), or a root a package dropped (herdr's systemd unit).
+# prune_dead_links only visits the roots packages still own, so either `git rm`
+# would leave links dangling on every other machine. Same narrow rule — dangling and
+# pointing into this repo — and each directory those links leave empty goes
+# too, up to and including the root, since no package stows there any more.
+# Only those: other tools write into a root like ~/.config/systemd, and an
+# empty directory of theirs isn't ours to remove. Binaries an old install put
+# in ~/.local/bin are left alone: they may still be in use.
+RETIRED_ROOTS=".config/lazygit .config/systemd"
 prune_retired_roots() {
-  local root troot entry tgt
+  local root troot entry tgt d
+  local emptied=()
   for root in $RETIRED_ROOTS; do
     troot="$HOME/$root"
     [ -d "$troot" ] && [ ! -L "$troot" ] || continue
@@ -169,12 +173,22 @@ prune_retired_roots() {
       case "$tgt" in
         "$DOTFILES_DIR"/*)
           rm -f "$entry"
-          echo "Removed dead link ~/${entry#"$HOME"/} — its package is no longer in the repo"
+          emptied+=("$(dirname "$entry")")
+          echo "Removed dead link ~/${entry#"$HOME"/} — no package stows there any more"
           ;;
       esac
     done < <(find "$troot" -type l)
-    # -empty and -depth are in BSD find too; rmdir refuses anything non-empty.
-    find "$troot" -depth -type d -empty -exec rmdir {} \; 2>/dev/null || true
+    # Walk up from each, stopping at the first directory that isn't empty
+    # (rmdir refuses those) or at the root. Every removal is done by now, so
+    # the order the directories come in doesn't matter.
+    if [ "${#emptied[@]}" -gt 0 ]; then
+      for d in "${emptied[@]}"; do
+        while rmdir "$d" 2>/dev/null && [ "$d" != "$troot" ]; do
+          d="$(dirname "$d")"
+        done
+      done
+      emptied=()
+    fi
   done
 }
 
@@ -435,22 +449,22 @@ if [ "$OS" = "Darwin" ] && [ ! -d /Applications/Ghostty.app ]; then
 fi
 
 # ── Tools no package manager looks after ─────────────────────
-# Starship and herdr (and, where you add them, deno, fnm, Claude Code and
+# Starship (and, where you add them, herdr, deno, fnm, Claude Code and
 # lazygit) come from update.sh, the one place that knows where each comes from.
 # --missing installs only what's absent, so re-running this script never
 # upgrades anything; `./update.sh --apply` does that when you choose to. Not
 # fatal: a tool that fails to install is reported and the rest carries on.
 "$DOTFILES_DIR/update.sh" --missing || echo "!! some tools failed to install — see above, then run ./update.sh"
 
-# On macOS, update.sh installs herdr from Homebrew; brew services needs to know.
+# On macOS, update.sh installs herdr from Homebrew when it's added; brew
+# services needs to know.
 HERDR_BREW=0
 if [ "$OS" = "Darwin" ] && command -v brew &>/dev/null && brew list --formula herdr &>/dev/null; then
   HERDR_BREW=1
 fi
 
 # Keep the herdr server running from login (Homebrew's launchd service), so
-# sessions — and the auto-layout daemon's subscription — don't depend on a
-# client having been opened first.
+# sessions don't depend on a client having been opened first.
 #
 # Not while another server is up: herdr allows one server per user, and a
 # second one exits with "herdr server is already running". That's usually the
@@ -575,82 +589,31 @@ EOF
 fi
 echo "────────────────────────────────────────────────────────"
 
-# ── herdr auto-layout daemon ─────────────────────────────────
-# Splits every new git-worktree workspace. herdr has no
-# on_worktree_create hook, so this is a socket-API subscriber that needs to be
-# running; see herdr/.config/herdr/scripts/herdr-autolayout.
-#
-# macOS has no systemd, so there it's a launchd agent instead of the unit. The
-# plist is generated rather than stowed: launchd doesn't expand ~ or $HOME, so
-# the paths in it have to be this machine's.
-HERDR_AUTOLAYOUT_LABEL="dotfiles.herdr-autolayout"
-
-herdr_autolayout_plist() {
-  local state="${XDG_STATE_HOME:-$HOME/.local/state}/herdr"
-  cat <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Generated by dotfiles install.sh; edits are overwritten on the next run. -->
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>$HERDR_AUTOLAYOUT_LABEL</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>$HOME/.config/herdr/scripts/herdr-autolayout</string>
-  </array>
-  <!-- launchd's default PATH is /usr/bin:/bin:/usr/sbin:/sbin, and the daemon
-       shells out to herdr (from Homebrew, or .local/bin). -->
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <!-- The daemon reconnects by itself when the herdr server restarts; this is
-       only a backstop for a crash, like Restart=always in the systemd unit. -->
-  <key>KeepAlive</key>
-  <true/>
-  <!-- The script writes its own autolayout.log; this catches tracebacks. -->
-  <key>StandardErrorPath</key>
-  <string>$state/autolayout.launchd.log</string>
-</dict>
-</plist>
-EOF
-}
-
-install_autolayout_launchd() {
-  local plist="$HOME/Library/LaunchAgents/$HERDR_AUTOLAYOUT_LABEL.plist"
-  local domain="gui/$(id -u)" new
-  new="$(herdr_autolayout_plist)"
-  mkdir -p "$HOME/Library/LaunchAgents" "${XDG_STATE_HOME:-$HOME/.local/state}/herdr"
-  # Already current and loaded: leave the running daemon alone.
-  if [ -f "$plist" ] && [ "$(cat "$plist")" = "$new" ] \
-     && launchctl print "$domain/$HERDR_AUTOLAYOUT_LABEL" &>/dev/null; then
-    return 0
-  fi
-  printf '%s\n' "$new" >"$plist"
-  launchctl bootout "$domain/$HERDR_AUTOLAYOUT_LABEL" &>/dev/null || true
-  if launchctl bootstrap "$domain" "$plist"; then
-    echo "Loaded herdr auto-layout launchd agent ($HERDR_AUTOLAYOUT_LABEL)"
-  else
-    echo "!! could not load $plist — run: launchctl bootstrap $domain $plist"
-  fi
-}
-
+# ── Retire the herdr auto-layout daemon ──────────────────────
+# Removed on 2026-10-26: see docs/adr/20261026-drop-herdr-autolayout.md. Its
+# files left the repo, so the stow loop has already pruned their links; what
+# can remain is the daemon itself, still running from memory. Silent where it
+# was never installed.
 if [ "$OS" = "Darwin" ]; then
-  install_autolayout_launchd
-elif command -v systemctl &>/dev/null && systemctl --user show-environment &>/dev/null; then
-  systemctl --user daemon-reload
-  if systemctl --user enable --now herdr-autolayout.service &>/dev/null; then
-    echo "Enabled herdr-autolayout.service (user unit)"
-  else
-    echo "!! could not enable herdr-autolayout.service — run: systemctl --user enable --now herdr-autolayout.service"
+  plist="$HOME/Library/LaunchAgents/dotfiles.herdr-autolayout.plist"
+  if [ -f "$plist" ]; then
+    launchctl bootout "gui/$(id -u)/dotfiles.herdr-autolayout" &>/dev/null || true
+    rm -f "$plist"
+    echo "Removed the retired herdr auto-layout launchd agent"
   fi
-else
-  echo "!! no systemd --user — start the herdr auto-layout daemon yourself:"
-  echo "   ~/.config/herdr/scripts/herdr-autolayout &"
+elif command -v systemctl &>/dev/null && systemctl --user show-environment &>/dev/null; then
+  # A unit whose file is gone stays loaded, and stoppable, until a reload.
+  # Ask for its state rather than is-active: with Restart=always and its script
+  # gone, it sits in "activating" (auto-restart) or "failed", which is-active
+  # calls inactive. Never fatal: a failed stop mustn't skip the steps below.
+  case "$(systemctl --user show -p ActiveState --value herdr-autolayout.service 2>/dev/null)" in
+    active|activating|deactivating|reloading|failed)
+      systemctl --user stop herdr-autolayout.service &>/dev/null || true
+      systemctl --user reset-failed herdr-autolayout.service &>/dev/null || true
+      echo "Stopped the retired herdr-autolayout.service"
+      ;;
+  esac
+  systemctl --user daemon-reload &>/dev/null || true
 fi
 
 # ── Repo-side pre-push guard ─────────────────────────────────

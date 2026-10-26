@@ -1,6 +1,7 @@
 #!/bin/sh
 # herdr package: config.toml is valid and pins the intended settings, runtime
-# state is git-ignored, and herdr is wired into install.sh / doctor.sh.
+# state is git-ignored, and herdr is wired into install.sh / doctor.sh as an
+# optional tool.
 HERE="$(dirname "$0")"
 . "$HERE/lib.sh"
 REPO="$(cd "$HERE/.." && pwd)"
@@ -26,11 +27,6 @@ grep -q 'name = "tokyo-night"' "$CONF" && pass "theme tokyo-night" || fail "them
 grep -q 'prefix = "ctrl+a"' "$CONF" && pass "prefix ctrl+a" || fail "prefix ctrl+a"
 grep -q '^sidebar_width = ' "$CONF" && pass "sidebar width pinned" || fail "sidebar width pinned"
 
-# New worktrees get a single pane: the auto-layout splits only when asked to
-LAYOUT="$REPO/herdr/.config/herdr/scripts/herdr-autolayout"
-grep -q 'DIRECTION = os.environ.get("HERDR_AUTOLAYOUT_DIRECTION", "none")' "$LAYOUT" \
-  && pass "auto-layout doesn't split by default" || fail "auto-layout doesn't split by default"
-
 # Runtime state is git-ignored (doctor.sh relies on this to skip it)
 for f in herdr.log herdr.sock session.json .plugins.lock release-notes.json session-snapshots/session-0.json; do
   if git -C "$REPO" check-ignore -q "herdr/.config/herdr/$f"; then
@@ -43,8 +39,20 @@ done
 # Wired into the package machinery
 grep -Eq 'for pkg in .*\bherdr\b' "$REPO/install.sh" && pass "install.sh stows herdr" || fail "install.sh stows herdr"
 grep -Eq 'PACKAGES=.*\bherdr\b' "$REPO/doctor.sh" && pass "doctor.sh scans herdr" || fail "doctor.sh scans herdr"
-grep -q 'update.sh" --missing' "$REPO/install.sh" && grep -q 'DEFAULT_TOOLS=.*\bherdr\b' "$REPO/update.sh" \
-  && pass "install.sh bootstraps herdr through update.sh" || fail "install.sh bootstraps herdr through update.sh"
+grep -q 'OPTIONAL_TOOLS=.*\bherdr\b' "$REPO/update.sh" \
+  && pass "herdr is an optional tool in update.sh" || fail "herdr is an optional tool in update.sh"
+
+# The auto-layout daemon is retired: nothing installs it, and install.sh stops
+# a copy an earlier run left behind (docs/adr/20261026-drop-herdr-autolayout.md).
+[ -z "$(git -C "$REPO" ls-files herdr/.config/systemd herdr/.config/herdr/scripts)" ] \
+  && pass "the herdr package ships no daemon" || fail "the herdr package ships no daemon"
+grep -q 'enable --now herdr-autolayout' "$REPO/install.sh" \
+  && fail "install.sh no longer enables the auto-layout unit" || pass "install.sh no longer enables the auto-layout unit"
+grep -q 'systemctl --user stop herdr-autolayout.service &>/dev/null || true' "$REPO/install.sh" \
+  && pass "install.sh stops a leftover auto-layout unit, and a failed stop isn't fatal" \
+  || fail "install.sh stops a leftover auto-layout unit, and a failed stop isn't fatal"
+grep -q 'launchctl bootout "gui/$(id -u)/dotfiles.herdr-autolayout"' "$REPO/install.sh" \
+  && pass "install.sh unloads a leftover launchd agent" || fail "install.sh unloads a leftover launchd agent"
 grep -q 'herdr.dev/install.sh' "$REPO/update.sh" && pass "update.sh knows herdr's installer" || fail "update.sh knows herdr's installer"
 
 # Scripts still parse
