@@ -44,12 +44,13 @@ grep -q 'OPTIONAL_TOOLS=.*\bherdr\b' "$REPO/update.sh" \
 
 # The auto-layout daemon is retired: nothing installs it, and install.sh stops
 # a copy an earlier run left behind (docs/adr/20261026-drop-herdr-autolayout.md).
-[ ! -e "$REPO/herdr/.config/systemd" ] && [ ! -e "$REPO/herdr/.config/herdr/scripts" ] \
+[ -z "$(git -C "$REPO" ls-files herdr/.config/systemd herdr/.config/herdr/scripts)" ] \
   && pass "the herdr package ships no daemon" || fail "the herdr package ships no daemon"
 grep -q 'enable --now herdr-autolayout' "$REPO/install.sh" \
   && fail "install.sh no longer enables the auto-layout unit" || pass "install.sh no longer enables the auto-layout unit"
-grep -q 'systemctl --user stop herdr-autolayout.service' "$REPO/install.sh" \
-  && pass "install.sh stops a leftover auto-layout unit" || fail "install.sh stops a leftover auto-layout unit"
+grep -q 'systemctl --user stop herdr-autolayout.service &>/dev/null || true' "$REPO/install.sh" \
+  && pass "install.sh stops a leftover auto-layout unit, and a failed stop isn't fatal" \
+  || fail "install.sh stops a leftover auto-layout unit, and a failed stop isn't fatal"
 grep -q 'launchctl bootout "gui/$(id -u)/dotfiles.herdr-autolayout"' "$REPO/install.sh" \
   && pass "install.sh unloads a leftover launchd agent" || fail "install.sh unloads a leftover launchd agent"
 grep -q 'herdr.dev/install.sh' "$REPO/update.sh" && pass "update.sh knows herdr's installer" || fail "update.sh knows herdr's installer"

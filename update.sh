@@ -283,7 +283,9 @@ herdr_from_brew() {
     echo "Installing herdr (Homebrew)..."
     brew install herdr \
       || { echo "!! brew install herdr failed — falling back to the official installer"; return 0; }
-    echo "   re-run ./install.sh to start herdr's server at login (brew services)"
+    BREWED_HERDR=1
+    # install.sh starts the service itself right after its --missing run.
+    [ "$MODE" != add ] || echo "   re-run ./install.sh to start herdr's server at login (brew services)"
   fi
   if [ -f "$BIN/herdr" ] && [ ! -L "$BIN/herdr" ]; then
     rm -f "$BIN/herdr"
@@ -325,6 +327,7 @@ upgrade_tool() {
 }
 
 # ── Main ─────────────────────────────────────────────────────
+BREWED_HERDR=0
 is_optional() { case " $OPTIONAL_TOOLS " in *" $1 "*) return 0 ;; esac; return 1; }
 
 row() { printf '  %-9s %-10s %s\n' "$1" "${2:--}" "$3"; }
@@ -360,7 +363,14 @@ for tool in $DEFAULT_TOOLS $OPTIONAL_TOOLS; do
   case "$MODE" in
     missing) continue ;;
     add)
-      case "$ADD" in *" $tool "*) echo "$tool $have is already installed" ;; esac
+      case "$ADD" in
+        *" $tool "*)
+          if [ "$tool" = herdr ] && [ "$BREWED_HERDR" -eq 1 ]; then
+            echo "herdr $have installed from Homebrew"
+          else
+            echo "$tool $have is already installed"
+          fi ;;
+      esac
       continue ;;
   esac
 

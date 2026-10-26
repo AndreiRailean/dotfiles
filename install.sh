@@ -155,12 +155,15 @@ prune_dead_links() {
 # altogether (lazygit), or a root a package dropped (herdr's systemd unit).
 # prune_dead_links only visits the roots packages still own, so either `git rm`
 # would leave links dangling on every other machine. Same narrow rule — dangling and
-# pointing into this repo — and the root goes too once nothing else is in it,
-# since no package stows there any more. Binaries an old install put in
-# ~/.local/bin are left alone: they may still be in use.
+# pointing into this repo — and each directory those links leave empty goes
+# too, up to and including the root, since no package stows there any more.
+# Only those: other tools write into a root like ~/.config/systemd, and an
+# empty directory of theirs isn't ours to remove. Binaries an old install put
+# in ~/.local/bin are left alone: they may still be in use.
 RETIRED_ROOTS=".config/lazygit .config/systemd"
 prune_retired_roots() {
-  local root troot entry tgt
+  local root troot entry tgt d
+  local emptied=()
   for root in $RETIRED_ROOTS; do
     troot="$HOME/$root"
     [ -d "$troot" ] && [ ! -L "$troot" ] || continue
@@ -170,12 +173,22 @@ prune_retired_roots() {
       case "$tgt" in
         "$DOTFILES_DIR"/*)
           rm -f "$entry"
-          echo "Removed dead link ~/${entry#"$HOME"/} — its package is no longer in the repo"
+          emptied+=("$(dirname "$entry")")
+          echo "Removed dead link ~/${entry#"$HOME"/} — no package stows there any more"
           ;;
       esac
     done < <(find "$troot" -type l)
-    # -empty and -depth are in BSD find too; rmdir refuses anything non-empty.
-    find "$troot" -depth -type d -empty -exec rmdir {} \; 2>/dev/null || true
+    # Walk up from each, stopping at the first directory that isn't empty
+    # (rmdir refuses those) or at the root. Every removal is done by now, so
+    # the order the directories come in doesn't matter.
+    if [ "${#emptied[@]}" -gt 0 ]; then
+      for d in "${emptied[@]}"; do
+        while rmdir "$d" 2>/dev/null && [ "$d" != "$troot" ]; do
+          d="$(dirname "$d")"
+        done
+      done
+      emptied=()
+    fi
   done
 }
 
@@ -590,11 +603,17 @@ if [ "$OS" = "Darwin" ]; then
   fi
 elif command -v systemctl &>/dev/null && systemctl --user show-environment &>/dev/null; then
   # A unit whose file is gone stays loaded, and stoppable, until a reload.
-  if systemctl --user is-active --quiet herdr-autolayout.service; then
-    systemctl --user stop herdr-autolayout.service
-    echo "Stopped the retired herdr-autolayout.service"
-  fi
-  systemctl --user daemon-reload
+  # Ask for its state rather than is-active: with Restart=always and its script
+  # gone, it sits in "activating" (auto-restart) or "failed", which is-active
+  # calls inactive. Never fatal: a failed stop mustn't skip the steps below.
+  case "$(systemctl --user show -p ActiveState --value herdr-autolayout.service 2>/dev/null)" in
+    active|activating|deactivating|reloading|failed)
+      systemctl --user stop herdr-autolayout.service &>/dev/null || true
+      systemctl --user reset-failed herdr-autolayout.service &>/dev/null || true
+      echo "Stopped the retired herdr-autolayout.service"
+      ;;
+  esac
+  systemctl --user daemon-reload &>/dev/null || true
 fi
 
 # ── Repo-side pre-push guard ─────────────────────────────────
