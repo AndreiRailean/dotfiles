@@ -110,7 +110,9 @@ fresh() {
   tool "$H/.local/bin/herdr" herdr 0.9.5
   tool "$T/sys/lazygit" lazygit 0.57.0
 }
-run() { HOME="$H" PATH="$T/sys:$T/util" "$BASH_BIN" "$UPDATE" "$@" 2>&1; }
+# No XDG_DATA_HOME: update.sh finds fnm through it, so the caller's own fnm
+# would otherwise count as installed.
+run() { env -u XDG_DATA_HOME HOME="$H" PATH="$T/sys:$T/util" "$BASH_BIN" "$UPDATE" "$@" 2>&1; }
 
 # ── report: says what's behind, changes nothing ───────────────
 fresh
@@ -279,6 +281,13 @@ assert_eq "$rc" 0 "--ask with stdin closed exits 0"
 fresh; for t in deno fnm claude; do tool "$H/.local/bin/$t" "$t" 1.0.0; done
 out="$(run --ask </dev/null)"
 assert_eq "$out" "" "--ask is silent when every optional tool is installed"
+
+# A machine whose last install.sh run predates unzip being installed.
+fresh; mv "$T/util/unzip" "$T/unzip.away"
+out="$(run --add fnm)"; rc=$?
+mv "$T/unzip.away" "$T/util/unzip"
+[ "$rc" -ne 0 ] && pass "--add fnm without unzip fails" || fail "--add fnm without unzip fails"
+assert_contains "$out" "unzip isn't installed — run ./install.sh" "--add fnm without unzip says how to fix it"
 
 grep -q '\[ -t 0 \] && \[ -t 1 \]' "$REPO/install.sh" && grep -q 'update.sh" --ask' "$REPO/install.sh" \
   && pass "install.sh asks only from a terminal" || fail "install.sh asks only from a terminal"

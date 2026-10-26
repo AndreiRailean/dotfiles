@@ -261,18 +261,6 @@ EOF
 }
 seed_global_gitconfig
 
-if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
-  echo "Installing win32yank for clipboard bridge..."
-  if curl -fsSLo /tmp/win32yank.zip \
-      https://github.com/equalsraf/win32yank/releases/latest/download/win32yank-x64.zip 2>/dev/null; then
-    unzip -oq /tmp/win32yank.zip win32yank.exe -d "$HOME/.local/bin/"
-    chmod +x "$HOME/.local/bin/win32yank.exe"
-    rm /tmp/win32yank.zip
-  else
-    echo "!! win32yank download failed — clipboard sync in nvim won't work until installed"
-  fi
-fi
-
 # ── CLI tools (best-effort; each is optional) ────────────────
 # ensure_tool <package> <cmd>...: install <package> unless one of <cmd> is
 # already on PATH. (bat is `batcat` on Debian/Ubuntu, `bat` elsewhere.)
@@ -299,6 +287,27 @@ ensure_tool rsync rsync
 ensure_tool git-delta delta
 # fd (friendlier find): apt calls the package fd-find, brew/pacman call it fd.
 if command -v apt &>/dev/null; then ensure_tool fd-find fd fdfind; else ensure_tool fd fd fdfind; fi
+# unzip: update.sh unpacks fnm and deno with it, and the Nerd Font and
+# win32yank below arrive as zips. Ubuntu's cloud images ship without it, so
+# on a fresh VM fnm's install failed. macOS ships one.
+ensure_tool unzip unzip
+
+if [ "$IS_WSL" -eq 1 ] && ! command -v win32yank.exe &>/dev/null; then
+  echo "Installing win32yank for clipboard bridge..."
+  if curl -fsSLo /tmp/win32yank.zip \
+      https://github.com/equalsraf/win32yank/releases/latest/download/win32yank-x64.zip 2>/dev/null; then
+    # Guarded: under set -e a failed unzip (it couldn't be installed above)
+    # would otherwise end the whole install here.
+    if unzip -oq /tmp/win32yank.zip win32yank.exe -d "$HOME/.local/bin/"; then
+      chmod +x "$HOME/.local/bin/win32yank.exe"
+    else
+      echo "!! couldn't unpack win32yank (is unzip installed?) — clipboard sync in nvim won't work until installed"
+    fi
+    rm -f /tmp/win32yank.zip
+  else
+    echo "!! win32yank download failed — clipboard sync in nvim won't work until installed"
+  fi
+fi
 
 # ── Neovim ───────────────────────────────────────────────────
 # nvim is EDITOR/VISUAL and has a stowed config, so a fresh machine needs it.
@@ -549,14 +558,21 @@ install_nerd_font() {
     fi
     return 0
   fi
-  [ -d "$FONT_DIR/$FONT_ARCHIVE" ] && return 0
+  # Files, not just the folder: a run that couldn't unpack (no unzip) used to
+  # leave an empty one, and every later run then skipped the font for good.
+  [ -n "$(ls -A "$FONT_DIR/$FONT_ARCHIVE" 2>/dev/null)" ] && return 0
   echo "Downloading $FONT_ARCHIVE Nerd Font (contains $FONT_FACE)..."
-  mkdir -p "$FONT_DIR/$FONT_ARCHIVE"
   FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.zip"
   if curl -fsSL "$FONT_URL" -o /tmp/${FONT_ARCHIVE}.zip 2>/dev/null; then
-    unzip -oq /tmp/${FONT_ARCHIVE}.zip -d "$FONT_DIR/$FONT_ARCHIVE" && rm /tmp/${FONT_ARCHIVE}.zip
-    command -v fc-cache &>/dev/null && fc-cache -f "$FONT_DIR" >/dev/null 2>&1
-    echo "Font files placed in $FONT_DIR/$FONT_ARCHIVE"
+    mkdir -p "$FONT_DIR/$FONT_ARCHIVE"
+    if unzip -oq /tmp/${FONT_ARCHIVE}.zip -d "$FONT_DIR/$FONT_ARCHIVE"; then
+      command -v fc-cache &>/dev/null && fc-cache -f "$FONT_DIR" >/dev/null 2>&1
+      echo "Font files placed in $FONT_DIR/$FONT_ARCHIVE"
+    else
+      rm -rf "${FONT_DIR:?}/$FONT_ARCHIVE"
+      echo "!! couldn't unpack the font (is unzip installed?) — re-run ./install.sh to retry"
+    fi
+    rm -f /tmp/${FONT_ARCHIVE}.zip
   else
     echo "!! Font download failed — grab Monaspace manually from https://www.nerdfonts.com"
   fi

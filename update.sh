@@ -191,6 +191,15 @@ dest() {
 
 unsupported() { echo "!! no $1 release for $OS/$ARCH — install it by hand"; return 1; }
 
+# needs_unzip <tool>: fnm and deno ship as zips. install.sh installs unzip, but
+# a machine whose last install.sh run predates that has none, and `--add fnm`
+# would die on "unzip: command not found" after the download.
+needs_unzip() {
+  command -v unzip >/dev/null 2>&1 && return 0
+  echo "!! $1 ships as a zip and unzip isn't installed — run ./install.sh (it installs unzip), then retry"
+  return 1
+}
+
 # starship, deno and fnm name their release assets without a version, so they
 # come from GitHub's releases/latest/download redirect. That isn't the API, so
 # its 60-an-hour unauthenticated limit — easy to hit behind a shared NAT or in
@@ -218,6 +227,7 @@ install_starship() {
 
 install_deno() {
   local t a u
+  needs_unzip deno || return 1
   case "$OS/$ARCH" in
     Linux/x86_64)              t=x86_64-unknown-linux-gnu ;;
     Linux/aarch64|Linux/arm64) t=aarch64-unknown-linux-gnu ;;
@@ -234,6 +244,7 @@ install_deno() {
 
 install_fnm() {
   local a
+  needs_unzip fnm || return 1
   case "$OS/$ARCH" in
     Linux/x86_64)              a=fnm-linux.zip ;;
     Linux/aarch64|Linux/arm64) a=fnm-arm64.zip ;;

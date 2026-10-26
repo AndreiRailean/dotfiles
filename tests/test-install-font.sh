@@ -30,20 +30,32 @@ echo "brew \$*" >>"$T/calls"
 [ "\$1" = list ] && exit 1
 exit 0
 EOF
+# curl fails unless $T/curl-ok exists; then it writes an empty "zip" to -o.
 cat >"$T/bin/curl" <<EOF
 #!/bin/sh
 echo "curl \$*" >>"$T/calls"
+[ -e "$T/curl-ok" ] || exit 1
+while [ \$# -gt 0 ]; do [ "\$1" = -o ] && : >"\$2"; shift; done
+exit 0
+EOF
+# unzip always fails: the font code must survive an archive it can't unpack.
+cat >"$T/bin/unzip" <<EOF
+#!/bin/sh
 exit 1
 EOF
-chmod +x "$T/bin/brew" "$T/bin/curl"
+chmod +x "$T/bin/brew" "$T/bin/curl" "$T/bin/unzip"
 
-# run <OS> [stale]: run install_nerd_font in a fresh HOME with the stubs first
-# on PATH. stale pre-creates an earlier run's download. The display signals
+# run <OS> [stale|empty]: run install_nerd_font in a fresh HOME with the stubs
+# first on PATH. stale pre-creates an earlier run's download; empty, the empty
+# folder a run that couldn't unpack used to leave. The display signals
 # come from the caller's DISPLAY / WAYLAND_DISPLAY / IS_WSL / SESSIONS, so the
 # host running the test can't leak its own into the result.
 run() {
   rm -rf "$T/home" "$T/calls"; mkdir -p "$T/home"; : >"$T/calls"
-  [ -n "${2:-}" ] && mkdir -p "$T/home/.local/share/fonts/Monaspace" && : >"$T/home/.local/share/fonts/Monaspace/x.otf"
+  case "${2:-}" in
+    stale) mkdir -p "$T/home/.local/share/fonts/Monaspace" && : >"$T/home/.local/share/fonts/Monaspace/x.otf" ;;
+    empty) mkdir -p "$T/home/.local/share/fonts/Monaspace" ;;
+  esac
   env -u DISPLAY -u WAYLAND_DISPLAY ${DISPLAY:+DISPLAY="$DISPLAY"} ${WAYLAND_DISPLAY:+WAYLAND_DISPLAY="$WAYLAND_DISPLAY"} \
     HOME="$T/home" XDG_DATA_HOME="$T/home/.local/share" PATH="$T/bin:/usr/bin:/bin" OS="$1" IS_WSL="${IS_WSL:-0}" \
     bash -c "$VARS
@@ -97,5 +109,19 @@ assert_not_contains "$(cat "$T/calls")" "curl" "WSL: does not download the font,
 DISPLAY=:0 run Linux stale
 [ -e "$STALE" ] && pass "Linux with a display: an existing download is kept" \
   || fail "Linux with a display: an existing download is kept"
+
+DISPLAY=:0 run Linux empty
+assert_contains "$(cat "$T/calls")" "curl" "Linux with a display: an empty font folder is downloaded again"
+
+DISPLAY=:0 run Linux
+[ ! -e "$STALE" ] && pass "a failed download leaves no font folder behind" \
+  || fail "a failed download leaves no font folder behind"
+
+touch "$T/curl-ok"
+DISPLAY=:0 run Linux; rc=$?
+rm -f "$T/curl-ok"
+assert_eq "$rc" 0 "an archive that won't unpack doesn't fail the install"
+[ ! -e "$STALE" ] && pass "an archive that won't unpack leaves no font folder behind" \
+  || fail "an archive that won't unpack leaves no font folder behind"
 
 finish
