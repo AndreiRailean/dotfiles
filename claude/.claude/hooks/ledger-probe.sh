@@ -31,6 +31,9 @@
 # items into the new ledger, then names the old ID and the transcript to read.
 # That note goes out even where the repo keeps its own ledger, since a repo
 # ledger keyed by session ID (telik's) is detached by a /clear in the same way.
+# A SessionStart(clear) that finds no handoff says so: its ledger can read
+# 0 open while the old one still holds items, and a wrap-up would call a
+# /clear safe on that.
 #
 # Apart from that handoff it writes NO files: ledger.sh creates the ledger on
 # the first line taken. It must always exit 0. A SessionStart hook that fails
@@ -47,8 +50,12 @@ while IFS= read -r line || [ -n "$line" ]; do
   line=''
 done
 
+# jq where it is installed and the payload parses; the sed fallback stops at a
+# quote in the value.
 field() {
-  printf '%s' "$payload" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p"
+  command -v jq >/dev/null 2>&1 &&
+    printf '%s' "$payload" | jq -r --arg k "$1" '.[$k] // empty | tostring' 2>/dev/null ||
+    printf '%s' "$payload" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p"
 }
 
 ledger="${LEDGER_SH:-$HOME/.claude/skills/wrap-up/ledger.sh}"
@@ -67,16 +74,21 @@ cwd=$(field cwd)
 [ -n "$cwd" ] && [ -d "$cwd" ] || cwd="$PWD"
 
 cleared=''
-if [ "$(field source)" = clear ] && handed=$(sh "$ledger" clear-in "$sid" 2>/dev/null); then
-  tab=$(printf '\t')
-  IFS="$tab" read -r old transcript carried <<EOF
+if [ "$(field source)" = clear ]; then
+  if handed=$(sh "$ledger" clear-in "$sid" 2>/dev/null); then
+    { read -r old; read -r transcript; read -r carried; } <<EOF
 $handed
 EOF
-  # Quotes and backslashes would break the JSON this is printed into.
-  transcript=$(printf '%s' "$transcript" | tr -d '"\\')
-  cleared="This session began with /clear, which gave it a new session ID; it was $old, and anything recorded under that ID is this session's too."
-  [ "${carried:-0}" -gt 0 ] && cleared="$cleared $carried open item(s) were carried from that ledger into this one."
-  [ -n "$transcript" ] && cleared="$cleared The conversation before the /clear is at $transcript; a /wrap-up reads it for what existed only there."
+    # Quotes, backslashes and control characters would break the JSON this is
+    # printed into.
+    transcript=$(printf '%s' "$transcript" | tr -d '"\\\000-\037')
+    cleared="This session began with /clear, which gave it a new session ID; it was $old, and anything recorded under that ID is this session's too."
+    [ "${carried:-0}" -gt 0 ] 2>/dev/null && cleared="$cleared $carried open item(s) were carried from that ledger into this one."
+    [ -n "$transcript" ] && cleared="$cleared The conversation before the /clear is at $transcript; a /wrap-up reads it for what existed only there."
+  else
+    dir=$(sh "$ledger" path "$sid" 2>/dev/null) && dir=${dir%/*}
+    cleared="This session began with /clear, which gave it a new session ID, but no handoff from the session before it arrived, so nothing that session recorded was carried here. Until its ledger is found (likely the newest file in ${dir:-the ledger directory}, by modification time), a /wrap-up cannot call a /clear safe."
+  fi
 fi
 
 if sh "$ledger" repo-ledger "$cwd" >/dev/null 2>&1; then

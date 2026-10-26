@@ -42,7 +42,10 @@
 # SessionEnd(clear) writes cleared.<claude pid> with the old ID and its
 # transcript, and the SessionStart(clear) right after it carries the old
 # ledger's open items into the new one under a `cleared-from:` line, which
-# `open` prints as `before /clear:` with the transcript to read. See
+# `open` prints as `before /clear:` with the transcript to read. The old ledger
+# gets them back as returned, under a `cleared-to:` line, so resuming the old ID
+# does not give one item two owners. A review clears the `before /clear:` list,
+# since it read those transcripts. See
 # docs/adr/20261025-clear-is-safe-only-after-a-wrap-up.md.
 #
 # project-skill exists because a personal skill shadows a project skill of the
@@ -116,8 +119,9 @@ open)
 		}
 		n[k]--; next
 	}
-	/^reviewed: / { last = substr($0, 11); next }
+	/^reviewed: / { last = substr($0, 11); c = 0; next }
 	/^cleared-from: / { cleared[++c] = substr($0, 15); next }
+	/^cleared-to: / { after = substr($0, 13); next }
 	/^#/ || /^$/  { next }
 	{ printf "ledger line %d is not taken:, returned: or reviewed:, so it is not counted: %s\n", NR, $0 > "/dev/stderr" }
 	END {
@@ -126,6 +130,7 @@ open)
 		print open " open"
 		if (last != "") print "last reviewed: " last
 		for (i = 1; i <= c; i++) print "before /clear: " cleared[i]
+		if (after != "") print "after /clear: " after
 	}' "$f"
 	;;
 clear-out)
@@ -133,32 +138,43 @@ clear-out)
 	[ -n "$old" ] || { echo "usage: ledger.sh clear-out OLD_ID [TRANSCRIPT]" >&2; exit 2; }
 	pid=$(claude_pid) || exit 1
 	mkdir -p "$state" || exit 1
-	printf '%s\t%s\n' "$old" "${2:-}" >"$state/cleared.$pid"
+	printf '%s\n%s\n' "$old" "${2:-}" >"$state/cleared.$pid"
 	;;
 clear-in)
-	# Prints OLD_ID, TRANSCRIPT and the number of items carried, tab-separated,
+	# Prints OLD_ID, TRANSCRIPT and the number of items carried, one per line,
 	# or nothing and exit 1 when no /clear handed this session anything.
 	new=${1:-}
 	[ -n "$new" ] || { echo "usage: ledger.sh clear-in NEW_ID" >&2; exit 2; }
 	pid=$(claude_pid) || exit 1
 	h="$state/cleared.$pid"
 	[ -f "$h" ] || exit 1
-	tab=$(printf '\t')
-	IFS="$tab" read -r old transcript <"$h"
+	# The SessionEnd that wrote it ran a moment ago. One older than that was
+	# left by a /clear whose SessionStart never consumed it, and PIDs are
+	# reused, a container's claude often getting the same low one each start.
+	fresh=$(find "$h" -mmin -1 2>/dev/null)
+	{ read -r old; read -r transcript; } <"$h"
 	rm -f "$h"
-	{ [ -n "$old" ] && [ "$old" != "$new" ]; } || exit 1
+	{ [ -n "$fresh" ] && [ -n "$old" ] && [ "$old" != "$new" ]; } || exit 1
 	oldf=$(ledger_path "$old") && newf=$(ledger_path "$new") || exit 1
 	carried=''
 	# Open items as they were taken, the review boundary, and any earlier
-	# /clear, so a chain of them keeps every transcript in reach.
+	# /clear, so a chain of them keeps every transcript in reach. The new
+	# cleared-from: goes last: a reviewed: clears the list of those before it.
 	[ -f "$oldf" ] && carried=$(sh "$0" open "$oldf" 2>/dev/null |
 		sed -n 's/^open: /taken: /p; s/^last reviewed: /reviewed: /p; s|^before /clear: |cleared-from: |p')
 	n=$(printf '%s\n' "$carried" | grep -c '^taken: ')
+	mkdir -p "${newf%/*}" || exit 1
 	{
-		printf 'cleared-from: %s %s\n' "$old" "$transcript"
 		[ -z "$carried" ] || printf '%s\n' "$carried"
+		printf 'cleared-from: %s %s\n' "$old" "$transcript"
 	} >>"$newf" || exit 1
-	printf '%s\t%s\t%s\n' "$old" "$transcript" "$n"
+	if [ "$n" -gt 0 ]; then
+		{
+			printf 'cleared-to: %s\n' "$new"
+			printf '%s\n' "$carried" | sed -n 's/^taken: /returned: /p'
+		} >>"$oldf"
+	fi
+	printf '%s\n%s\n%s\n' "$old" "$transcript" "$n"
 	;;
 path)
 	ledger_path "${1:-}"
