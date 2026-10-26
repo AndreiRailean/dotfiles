@@ -100,8 +100,12 @@ One of those skills, `wrap-up`, shares its name with the wrap-up some repos
 write for themselves, and a personal skill wins that clash. So its first step
 hands over to the repo's own `.claude/skills/wrap-up` when there is one, and
 `ledger-probe.sh`, which asks each session to keep the ledger the wrap-up
-reads, stays quiet in those repos. See
+reads, stays quiet where the repo asks for a ledger of its own. See
 [docs/adr/20261024-global-wrap-up-shadows-and-hands-over.md](docs/adr/20261024-global-wrap-up-shadows-and-hands-over.md).
+The probe also runs at `SessionEnd`, so a `/clear`, which starts a new session
+ID, carries the open items across; the conversation it drops is why a `/clear`
+is safe only after a wrap-up
+([docs/adr/20261025-clear-is-safe-only-after-a-wrap-up.md](docs/adr/20261025-clear-is-safe-only-after-a-wrap-up.md)).
 
 Not to be confused with this repo's own root `CLAUDE.md`, which is not stowed
 anywhere. Since 2.1.277 Claude Code loads `AGENTS.md` on its own, but only

@@ -67,4 +67,5 @@ substitutions (`${CLAUDE_SKILL_DIR}`, `$ARGUMENTS`); the hand-over says to read
 today.
 
 A `/clear` starts a new session ID and so an empty ledger; what the old ID
-recorded drops out of the count. Known and unhandled.
+recorded drops out of the count. Known and unhandled. (Handled since, by
+20261025-clear-is-safe-only-after-a-wrap-up.)
