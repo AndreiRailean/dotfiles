@@ -436,14 +436,15 @@ if [ "$OS" = "Darwin" ] && [ ! -d /Applications/Ghostty.app ]; then
 fi
 
 # ── Tools no package manager looks after ─────────────────────
-# Starship and herdr (and, where you add them, deno, fnm, Claude Code and
+# Starship (and, where you add them, herdr, deno, fnm, Claude Code and
 # lazygit) come from update.sh, the one place that knows where each comes from.
 # --missing installs only what's absent, so re-running this script never
 # upgrades anything; `./update.sh --apply` does that when you choose to. Not
 # fatal: a tool that fails to install is reported and the rest carries on.
 "$DOTFILES_DIR/update.sh" --missing || echo "!! some tools failed to install — see above, then run ./update.sh"
 
-# On macOS, update.sh installs herdr from Homebrew; brew services needs to know.
+# On macOS, update.sh installs herdr from Homebrew when it's added; brew
+# services needs to know.
 HERDR_BREW=0
 if [ "$OS" = "Darwin" ] && command -v brew &>/dev/null && brew list --formula herdr &>/dev/null; then
   HERDR_BREW=1

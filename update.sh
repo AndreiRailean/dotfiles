@@ -25,8 +25,8 @@
 
 set -euo pipefail
 
-DEFAULT_TOOLS="starship herdr"
-OPTIONAL_TOOLS="deno fnm claude lazygit"
+DEFAULT_TOOLS="starship"
+OPTIONAL_TOOLS="herdr deno fnm claude lazygit"
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -275,12 +275,15 @@ install_claude() {
 # herdr came from brew) shadows brew's, since ~/.local/bin precedes
 # /opt/homebrew/bin on PATH — and `herdr update` / `brew upgrade` then each
 # update a different binary, so the two drift apart. brew owns herdr there.
+# herdr is optional, so this only acts where it's installed or being added.
 herdr_from_brew() {
   [ "$OS" = Darwin ] && command -v brew >/dev/null 2>&1 || return 0
   if ! brew list --formula herdr >/dev/null 2>&1; then
+    case "$ADD" in *" herdr "*) ;; *) [ -n "$(version herdr)" ] || return 0 ;; esac
     echo "Installing herdr (Homebrew)..."
     brew install herdr \
       || { echo "!! brew install herdr failed — falling back to the official installer"; return 0; }
+    echo "   re-run ./install.sh to start herdr's server at login (brew services)"
   fi
   if [ -f "$BIN/herdr" ] && [ ! -L "$BIN/herdr" ]; then
     rm -f "$BIN/herdr"
@@ -327,7 +330,10 @@ is_optional() { case " $OPTIONAL_TOOLS " in *" $1 "*) return 0 ;; esac; return 1
 row() { printf '  %-9s %-10s %s\n' "$1" "${2:--}" "$3"; }
 
 FAILED=0
-[ "$MODE" = missing ] || [ "$MODE" = apply ] && herdr_from_brew
+case "$MODE" in
+  missing|apply) herdr_from_brew ;;
+  add)           case "$ADD" in *" herdr "*) herdr_from_brew ;; esac ;;
+esac
 [ "$MODE" = report ] || [ "$MODE" = apply ] && echo "Tools not managed by a package manager:"
 
 for tool in $DEFAULT_TOOLS $OPTIONAL_TOOLS; do

@@ -29,8 +29,9 @@ Then restart your shell (or `exec "$SHELL"`).
    cask on macOS; a release download into `~/.local/share/fonts` elsewhere),
    Ghostty (macOS), and (on WSL) `win32yank` for clipboard bridging. Terminal
    font selection is a manual step it prints.
-6. Install Starship and herdr through `update.sh --missing`, and end with
-   `update.sh`'s version report (see [Updating tools](#updating-tools)).
+6. Install Starship through `update.sh --missing`, and end with `update.sh`'s
+   version report (see [Updating tools](#updating-tools)). herdr, Claude Code
+   and the other optional tools are added per machine with `update.sh --add`.
 
 ## Updating tools
 
@@ -47,7 +48,7 @@ is always safe. Upgrading the tools that no package manager looks after is
 | Tool | Default or optional | Comes from | Upgraded by |
 | ---- | ------------------- | ---------- | ----------- |
 | starship | default | GitHub release, sha256-checked | a fresh release download |
-| herdr | default | Homebrew on macOS, else herdr's installer | `herdr update` |
+| herdr | optional | Homebrew on macOS, else herdr's installer | `herdr update` |
 | deno | optional | GitHub release, sha256-checked | `deno upgrade` |
 | fnm | optional | GitHub release (none published a checksum) | a fresh release download |
 | claude | optional | Claude Code's installer | `claude update` |
@@ -347,9 +348,11 @@ agent a real persistent pane and surfaces working/blocked/done/idle state
 natively (what the tmux setup above approximates with hooks). It's the
 agent-focused driver; **tmux stays** for plain and SSH-only boxes.
 
-`install.sh` installs it with Homebrew on macOS (`brew install herdr`, then
-`brew services start herdr` so the server is up from login) and via the
-official installer elsewhere (`curl -fsSL https://herdr.dev/install.sh | sh`).
+It's optional: `./update.sh --add herdr` puts it on a machine. That uses
+Homebrew on macOS (`brew install herdr`; the next `install.sh` run then does
+`brew services start herdr` so the server is up from login) and the official
+installer elsewhere. Its config is stowed everywhere, which is harmless where
+herdr isn't installed.
 There's no version pin: `brew upgrade herdr` or `herdr update` keeps it
 current. If an earlier run left the official installer's copy in
 `~/.local/bin`, a macOS run removes it so brew's is the only one.

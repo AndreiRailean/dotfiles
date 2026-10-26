@@ -1,6 +1,7 @@
 #!/bin/sh
 # herdr package: config.toml is valid and pins the intended settings, runtime
-# state is git-ignored, and herdr is wired into install.sh / doctor.sh.
+# state is git-ignored, and herdr is wired into install.sh / doctor.sh as an
+# optional tool.
 HERE="$(dirname "$0")"
 . "$HERE/lib.sh"
 REPO="$(cd "$HERE/.." && pwd)"
@@ -38,8 +39,8 @@ done
 # Wired into the package machinery
 grep -Eq 'for pkg in .*\bherdr\b' "$REPO/install.sh" && pass "install.sh stows herdr" || fail "install.sh stows herdr"
 grep -Eq 'PACKAGES=.*\bherdr\b' "$REPO/doctor.sh" && pass "doctor.sh scans herdr" || fail "doctor.sh scans herdr"
-grep -q 'update.sh" --missing' "$REPO/install.sh" && grep -q 'DEFAULT_TOOLS=.*\bherdr\b' "$REPO/update.sh" \
-  && pass "install.sh bootstraps herdr through update.sh" || fail "install.sh bootstraps herdr through update.sh"
+grep -q 'OPTIONAL_TOOLS=.*\bherdr\b' "$REPO/update.sh" \
+  && pass "herdr is an optional tool in update.sh" || fail "herdr is an optional tool in update.sh"
 
 # The auto-layout daemon is retired: nothing installs it, and install.sh stops
 # a copy an earlier run left behind (docs/adr/20261026-drop-herdr-autolayout.md).
