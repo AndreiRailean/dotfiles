@@ -191,6 +191,8 @@ case "$(awk '/^prune_retired_roots\(\)/,/^}/' "$INST")" in
 esac
 assert_contains "$(grep -m1 '^RETIRED_ROOTS=' "$INST")" ".config/lazygit" \
   "lazygit's old root is listed as retired"
+assert_contains "$(grep -m1 '^RETIRED_ROOTS=' "$INST")" ".config/systemd" \
+  "herdr's old systemd root is listed as retired"
 RFNS="$(awk '/^link_target_abs\(\)/,/^}/' "$INST")
 $(awk '/^prune_retired_roots\(\)/,/^}/' "$INST")"
 
@@ -198,6 +200,8 @@ R="$T/retired"
 mkdir -p "$R/home/dotfiles" "$R/home/.config/old/sub" "$R/home/.config/mixed"
 ln -s "../../dotfiles/old/.config/old/old.yml" "$R/home/.config/old/old.yml"
 ln -s "../../../dotfiles/old/.config/old/sub/x" "$R/home/.config/old/sub/x"
+# `systemctl enable` links by absolute path (default.target.wants/<unit>).
+ln -s "$R/home/dotfiles/old/.config/old/sub/abs.service" "$R/home/.config/old/sub/abs.service"
 ln -s "../../dotfiles/old/.config/mixed/m.yml" "$R/home/.config/mixed/m.yml"
 printf 'mine\n' >"$R/home/.config/mixed/notes.txt"
 ln -s "/nonexistent/elsewhere" "$R/home/.config/mixed/foreign"

@@ -9,8 +9,7 @@
 # install.sh runs --missing and then the report, so this file is the one place
 # that knows where each of these tools comes from — and re-running install.sh
 # still never upgrades anything behind your back. Upgrading is always a
-# deliberate --apply, because some upgrades want a follow-up check (herdr's
-# auto-layout retest, printed after it updates).
+# deliberate --apply.
 #
 # DEFAULT tools go on every machine. OPTIONAL tools go only where you ask with
 # --add; after that, presence is the opt-in — a tool on PATH is reported and
@@ -311,12 +310,11 @@ install_tool() {
   "install_$1" "$v" && runs "$1"
 }
 
-HERDR_UPDATED=0
 # upgrade_tool <tool> <version>: bring a copy this script owns up to version.
 upgrade_tool() {
   echo "Upgrading $1 to $2..."
   case "$1" in
-    herdr)  herdr update && HERDR_UPDATED=1 ;;
+    herdr)  herdr update ;;
     claude) claude update ;;
     deno)   deno upgrade ;;
     *)      "install_$1" "$2" ;;
@@ -379,12 +377,6 @@ for tool in $DEFAULT_TOOLS $OPTIONAL_TOOLS; do
     esac
   fi
 done
-
-if [ "$HERDR_UPDATED" -eq 1 ]; then
-  echo ""
-  echo "herdr was updated. Retest the worktree auto-layout as the header of"
-  echo "~/.config/herdr/config.toml describes, then bump its 'Last verified' line."
-fi
 
 # Upgrades the package managers own are theirs to run; just say they're waiting.
 if [ "$MODE" = report ] || [ "$MODE" = apply ]; then

@@ -1,30 +1,5 @@
 # herdr configuration — managed by dotfiles.
 #
-# ┌─ RETEST AFTER A herdr UPGRADE ────────────────────────────────────────────┐
-# │ Last verified against: herdr 0.9.5                                        │
-# │                                                                           │
-# │ The worktree auto-layout (scripts/herdr-autolayout, prefix+shift+L, and   │
-# │ herdr-autolayout.service) rests on two behaviours the API does NOT        │
-# │ document, so an upgrade can silently break it:                            │
-# │                                                                           │
-# │   1. `workspace_created` is delivered on an events.subscribe stream even  │
-# │      though SubscriptionEventKind does not list it.                       │
-# │   2. `events.wait` rejects workspace matches its schema advertises        │
-# │      (unsupported_event_wait_match), which is why we subscribe instead.   │
-# │                                                                           │
-# │ It fails soft — layouts just stop happening, herdr itself keeps working — │
-# │ so the failure is easy to miss. After `herdr update`, retest:             │
-# │                                                                           │
-# │   herdr --version                       # note the new version            │
-# │   prefix+shift+G                        # make a throwaway worktree       │
-# │   # expect: one "claude" tab, a single pane, claude running in it         │
-# │   tail ~/.local/state/herdr/autolayout.log                                │
-# │   prefix+shift+L                        # and the manual path             │
-# │                                                                           │
-# │ If it broke, both suspects and the reasoning are in the docstring of      │
-# │ scripts/herdr-autolayout. Bump the version above once it passes.          │
-# └───────────────────────────────────────────────────────────────────────────┘
-#
 # Only a few settings are pinned here; everything else uses herdr's defaults
 # (it auto-detects agents with zero config). Run `herdr --default-config` to
 # see the full set of options.
@@ -57,22 +32,6 @@ surface_dim = "#33467c"
 # Match the tmux prefix (Ctrl-a) for muscle memory. Everything else keeps
 # herdr's default keymap (pane nav prefix+h/j/k/l, splits prefix+v / prefix+-).
 prefix = "ctrl+a"
-
-# Apply the worktree layout (a "claude" tab running claude) to the current
-# workspace by hand — for a workspace that predates the auto-layout daemon, or
-# one you've since rearranged. Same code path the daemon uses, and idempotent,
-# so pressing it twice is harmless.
-#
-# "popup" rather than "pane": a popup is session-modal and doesn't alter the tab
-# layout, which matters because the script decides whether to split by counting
-# the panes in the tab. It closes itself when the script finishes, so it doubles
-# as a progress log. L for layout; verified free against herdr's default keymap.
-[[keys.command]]
-key = "prefix+shift+l"
-type = "popup"
-command = "$HOME/.config/herdr/scripts/herdr-autolayout arrange"
-width = "70%"
-height = "50%"
 
 [ui]
 agent_panel_sort = "priority"

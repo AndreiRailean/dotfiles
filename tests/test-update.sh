@@ -177,7 +177,6 @@ out="$(run --apply)"; rc=$?
 assert_eq "$rc" 0 "--apply exits 0"
 assert_contains "$("$H/.local/bin/starship" --version)" "1.1.0" "--apply upgrades starship in place"
 assert_contains "$(cat "$T/calls" 2>/dev/null)" "herdr update" "--apply upgrades herdr with herdr update"
-assert_contains "$out" "Retest the worktree auto-layout" "an herdr upgrade prints the retest reminder"
 assert_contains "$("$T/sys/lazygit" --version)" "version=0.57.0" "--apply leaves the system lazygit alone"
 [ ! -e "$H/.local/bin/lazygit" ] && pass "--apply installs no optional tool" || fail "--apply installs no optional tool"
 
