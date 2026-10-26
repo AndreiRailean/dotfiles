@@ -369,7 +369,9 @@ config — pinning only:
 
 - `prefix = "ctrl+a"` to match the tmux prefix,
 - the `tokyo-night` theme,
-- `onboarding = false`.
+- `onboarding = false`,
+- a wider sidebar (`sidebar_width` and its min and max),
+- symbol status indicators and OS notifications instead of herdr's toast.
 
 Run `herdr --default-config` to see everything else you could set, and
 `herdr server reload-config` (or `prefix+shift+r`) after editing.
@@ -386,12 +388,14 @@ conflict — adopt it with `./doctor.sh --adopt` or remove it first.
 Every new git-worktree workspace gets the same treatment automatically:
 
 ```
-┌────────────────┬────────────────┐   tab 1: "claude"
-│ claude         │ plain shell    │   left pane focused
-└────────────────┴────────────────┘
+┌─────────────────────────────────┐   tab 1: "claude"
+│ claude                          │   one pane, no split
+└─────────────────────────────────┘
 ```
 
-One tab, split in two. Nothing else is opened.
+One tab running Claude Code. Nothing else is opened: a shell beside it is a
+`prefix+v` away when it's wanted, and `DIRECTION` below brings back the
+automatic split.
 
 herdr has **no declarative hook** for this — there's no `on_worktree_create` in
 `config.toml`, and `herdr integration` only manages agent integrations. So
@@ -400,9 +404,10 @@ event stream instead, which keeps the native `prefix+shift+G` flow untouched and
 fires however the worktree was created (TUI, CLI, or API).
 
 **Or apply it by hand: `prefix+shift+L`.** Same code path, for a workspace that
-predates the daemon or one you've since rearranged. It's idempotent — the split
-only happens when the tab has one pane, and a command is only sent if it isn't
-already running — so pressing it twice is a no-op. Two entry points, one
+predates the daemon or one you've since rearranged. It's idempotent — a command
+is only sent if it isn't already running, and a split (when `DIRECTION` asks
+for one) only happens when the tab has one pane — so pressing it twice is a
+no-op. Two entry points, one
 implementation:
 
     herdr-autolayout                  # daemon: arrange every new worktree
@@ -445,8 +450,8 @@ generates, so a hand edit only lasts until the next install.
 | `LEFT_CMD` | left pane command (default `claude`; empty = plain shell) |
 | `RIGHT_CMD` | right pane command (default: none, just a shell) |
 | `MAIN_TAB` | first tab's label (default `claude`; empty keeps herdr's number) |
-| `FOCUS` | `left` (default) / `right` / `none` |
-| `DIRECTION` | `right` (default) / `down` |
+| `FOCUS` | `left` (default) / `right` / `none`, after a split |
+| `DIRECTION` | `none` (default: no split) / `right` / `down` |
 | `RATIO` | split ratio, e.g. `0.5` |
 | `READY_SECS` | how long to wait for a shell prompt (default 90) |
 

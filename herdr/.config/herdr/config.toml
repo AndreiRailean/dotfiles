@@ -1,7 +1,7 @@
 # herdr configuration — managed by dotfiles.
 #
 # ┌─ RETEST AFTER A herdr UPGRADE ────────────────────────────────────────────┐
-# │ Last verified against: herdr 0.9.3                                        │
+# │ Last verified against: herdr 0.9.5                                        │
 # │                                                                           │
 # │ The worktree auto-layout (scripts/herdr-autolayout, prefix+shift+L, and   │
 # │ herdr-autolayout.service) rests on two behaviours the API does NOT        │
@@ -17,7 +17,7 @@
 # │                                                                           │
 # │   herdr --version                       # note the new version            │
 # │   prefix+shift+G                        # make a throwaway worktree       │
-# │   # expect: one "claude" tab, split in two, claude left, focus left       │
+# │   # expect: one "claude" tab, a single pane, claude running in it         │
 # │   tail ~/.local/state/herdr/autolayout.log                                │
 # │   prefix+shift+L                        # and the manual path             │
 # │                                                                           │
@@ -58,10 +58,10 @@ surface_dim = "#33467c"
 # herdr's default keymap (pane nav prefix+h/j/k/l, splits prefix+v / prefix+-).
 prefix = "ctrl+a"
 
-# Apply the worktree layout (claude | shell) to the current workspace by hand —
-# for a workspace that predates the auto-layout daemon, or one you've since
-# rearranged. Same code path the daemon uses, and idempotent, so pressing it
-# twice is harmless.
+# Apply the worktree layout (a "claude" tab running claude) to the current
+# workspace by hand — for a workspace that predates the auto-layout daemon, or
+# one you've since rearranged. Same code path the daemon uses, and idempotent,
+# so pressing it twice is harmless.
 #
 # "popup" rather than "pane": a popup is session-modal and doesn't alter the tab
 # layout, which matters because the script decides whether to split by counting
@@ -76,6 +76,14 @@ height = "50%"
 
 [ui]
 agent_panel_sort = "priority"
+
+# A wider sidebar, so space and agent rows aren't truncated. herdr sizes it to
+# the workspace names between min and max, starting from sidebar_width; the
+# defaults are 26 (18–36). With no auto-split pane on the right any more, the
+# room is better spent here.
+sidebar_width = 40
+sidebar_min_width = 32
+sidebar_max_width = 48
 
 # A distinct glyph per agent state (blocked, working, done, idle, unknown)
 # rather than the default colour dots.
