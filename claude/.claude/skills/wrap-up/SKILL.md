@@ -1,6 +1,6 @@
 ---
 name: wrap-up
-description: Wrap up a session — stop its background work and servers, return the branches, worktrees and files it made, name what exists only in the conversation, and report what is not yours to touch. Use when the user asks for a wrap-up or says the session is over, when the work is handed off, and before saying a task is finished.
+description: Wrap up a session — stop its background work and servers, return the branches, worktrees and files it made, name what exists only in the conversation, and report what is not yours to touch. Use when the user asks for a wrap-up or says the session is over, when the work is handed off, before saying a task is finished, and before a /clear.
 ---
 
 # Wrap-up
@@ -24,7 +24,10 @@ knows the repo's servers, build output and shared resources. Where it writes
 `${CLAUDE_SKILL_DIR}`, read the directory that file is in. Wherever it says
 the ledger is, also run `sh ${CLAUDE_SKILL_DIR}/ledger.sh open`: a
 session-start note may have had this session record there instead, and
-every open item it lists is this session's too.
+every open item it lists is this session's too. Each `before /clear:` line it
+prints names an earlier session ID of this session: the repo's ledger under
+that ID is this session's as well, and the transcript beside it is read in its
+step for what the conversation holds.
 
 If it prints nothing, carry on.
 
@@ -56,6 +59,12 @@ sh ${CLAUDE_SKILL_DIR}/ledger.sh returned 'branch feat/x (deleted after #12)'
 
 An item matches on the text before its trailing note, so copy it exactly. The
 ledger is append-only; never edit or delete it.
+
+**A `/clear` starts a new session ID.** A hook carries the open items across
+into the new ledger, and `ledger.sh open` then prints a `before /clear:` line
+with the earlier ID and the transcript of the conversation before it. The
+items survive a `/clear`; the conversation does not, which is why a `/clear`
+is safe only after a wrap-up.
 
 **No ledger, or a gap in it:** say so in the report, and return only what you
 can tie to this session with certainty, such as a background task this
@@ -169,7 +178,16 @@ got done will see.
 - a **rule obeyed in letter and missed in spirit**.
 
 The scope is the session since the `last reviewed:` line `ledger.sh open`
-printed, or the whole session if there is none. Count signals against what you
+printed, or the whole session if there is none. A session that began with
+`/clear` started before it: read each transcript a `before /clear:` line names,
+back to that boundary, as part of the session. It is JSONL; the user's side,
+where corrections are, reads out with:
+
+```sh
+jq -r 'select(.type == "user") | .message.content | if type == "string" then . else (map(.text? // empty) | join(" ")) end' <transcript>
+```
+
+Count signals against what you
 examined, so the count is checkable. Several with one cause are one
 **finding**: what happened, its evidence, and the cause in the method rather
 than the code. No signals is a valid result, and then this is one line.
@@ -208,7 +226,13 @@ PRs in the ledger: <number: state, checks> · main checkout: <sha> | untouched, 
 signals: <n> (<what was examined>) · findings: <n>
 not captured: <each finding and item, with its suggested capture>
 left running on purpose: <what, and why>
+/clear: safe | not yet: <what is still open or uncaptured>
 ```
+
+The last line answers the user's next move. **`/clear` is safe only when the
+ledger shows 0 open and step 5 is done**: a `/clear` carries the ledger but
+drops the conversation, and step 5 is the one step that reads it. Anything
+open is named, so the user can choose to clear anyway.
 
 **Ready to close means every line is zero or names a reason**, and the tree
 line takes no general reason. `git status --porcelain` prints nothing, or every

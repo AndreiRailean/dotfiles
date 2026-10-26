@@ -40,6 +40,16 @@
         ]
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -r \"$HOME/.claude/hooks/ledger-probe.sh\" ] && sh \"$HOME/.claude/hooks/ledger-probe.sh\" || exit 0"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",

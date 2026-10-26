@@ -7,6 +7,8 @@
 #   ledger.sh procs [DIR]                    list processes running inside the worktree
 #   ledger.sh project-skill [DIR]            print the repo's own wrap-up skill, if any
 #   ledger.sh repo-ledger [DIR]              succeed if the repo asks for its own ledger
+#   ledger.sh clear-out OLD_ID [TRANSCRIPT]  at SessionEnd(clear): leave a handoff
+#   ledger.sh clear-in NEW_ID                at SessionStart(clear): carry the open items
 #
 # WHY THIS FILE EXISTS: a wrap-up must return only what this session took, and
 # none of that can be recovered afterwards — a branch does not carry its
@@ -30,7 +32,18 @@
 # match on the text before a TRAILING parenthesised note, and only on that, so
 # a date or PR number in the note does not stop a match. Items are counted, +1
 # per taken and -1 per returned, so one taken again after it was returned is
-# open again; a return with nothing open is reported, never counted below zero. The file is append-only: nothing here rewrites or deletes it.
+# open again; a return with nothing open is reported, never counted below zero.
+# The file is append-only: nothing here rewrites or deletes it.
+#
+# A /clear starts a new session ID, which would leave everything recorded so
+# far in a ledger nothing reads, and the conversation that step 5 of the
+# wrap-up reads back over out of context. No hook payload names the previous
+# ID, so the two halves of a /clear meet through the claude process they share:
+# SessionEnd(clear) writes cleared.<claude pid> with the old ID and its
+# transcript, and the SessionStart(clear) right after it carries the old
+# ledger's open items into the new one under a `cleared-from:` line, which
+# `open` prints as `before /clear:` with the transcript to read. See
+# docs/adr/20261025-clear-is-safe-only-after-a-wrap-up.md.
 #
 # project-skill exists because a personal skill shadows a project skill of the
 # same name, so ~/.claude/skills/wrap-up runs even in a repo that wrote its own.
@@ -48,6 +61,23 @@ ledger_path() {
 		return 1
 	fi
 	printf '%s/%s\n' "$state" "$sid"
+}
+
+# The claude process this runs under. Commands Claude runs get CLAUDE_PID;
+# without it, the nearest ancestor whose command is `claude`.
+claude_pid() {
+	if [ -n "${CLAUDE_PID:-}" ]; then
+		echo "$CLAUDE_PID"
+		return 0
+	fi
+	p=$$
+	while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+		a=$(ps -o args= -p "$p" 2>/dev/null) || return 1
+		a=${a%% *}
+		[ "${a##*/}" = claude ] && { echo "$p"; return 0; }
+		p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+	done
+	return 1
 }
 
 cmd=${1:-}
@@ -87,6 +117,7 @@ open)
 		n[k]--; next
 	}
 	/^reviewed: / { last = substr($0, 11); next }
+	/^cleared-from: / { cleared[++c] = substr($0, 15); next }
 	/^#/ || /^$/  { next }
 	{ printf "ledger line %d is not taken:, returned: or reviewed:, so it is not counted: %s\n", NR, $0 > "/dev/stderr" }
 	END {
@@ -94,7 +125,40 @@ open)
 		for (i = 1; i <= m; i++) if (n[order[i]] > 0) { print "open: " shown[order[i]]; open++ }
 		print open " open"
 		if (last != "") print "last reviewed: " last
+		for (i = 1; i <= c; i++) print "before /clear: " cleared[i]
 	}' "$f"
+	;;
+clear-out)
+	old=${1:-}
+	[ -n "$old" ] || { echo "usage: ledger.sh clear-out OLD_ID [TRANSCRIPT]" >&2; exit 2; }
+	pid=$(claude_pid) || exit 1
+	mkdir -p "$state" || exit 1
+	printf '%s\t%s\n' "$old" "${2:-}" >"$state/cleared.$pid"
+	;;
+clear-in)
+	# Prints OLD_ID, TRANSCRIPT and the number of items carried, tab-separated,
+	# or nothing and exit 1 when no /clear handed this session anything.
+	new=${1:-}
+	[ -n "$new" ] || { echo "usage: ledger.sh clear-in NEW_ID" >&2; exit 2; }
+	pid=$(claude_pid) || exit 1
+	h="$state/cleared.$pid"
+	[ -f "$h" ] || exit 1
+	tab=$(printf '\t')
+	IFS="$tab" read -r old transcript <"$h"
+	rm -f "$h"
+	{ [ -n "$old" ] && [ "$old" != "$new" ]; } || exit 1
+	oldf=$(ledger_path "$old") && newf=$(ledger_path "$new") || exit 1
+	carried=''
+	# Open items as they were taken, the review boundary, and any earlier
+	# /clear, so a chain of them keeps every transcript in reach.
+	[ -f "$oldf" ] && carried=$(sh "$0" open "$oldf" 2>/dev/null |
+		sed -n 's/^open: /taken: /p; s/^last reviewed: /reviewed: /p; s|^before /clear: |cleared-from: |p')
+	n=$(printf '%s\n' "$carried" | grep -c '^taken: ')
+	{
+		printf 'cleared-from: %s %s\n' "$old" "$transcript"
+		[ -z "$carried" ] || printf '%s\n' "$carried"
+	} >>"$newf" || exit 1
+	printf '%s\t%s\t%s\n' "$old" "$transcript" "$n"
 	;;
 path)
 	ledger_path "${1:-}"
@@ -186,7 +250,7 @@ project-skill)
 	exit 1
 	;;
 *)
-	sed -n '2,9s/^# \{0,1\}//p' "$0" >&2
+	sed -n '2,11s/^# \{0,1\}//p' "$0" >&2
 	exit 2
 	;;
 esac
