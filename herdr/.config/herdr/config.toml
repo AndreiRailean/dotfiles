@@ -77,6 +77,14 @@ height = "50%"
 [ui]
 agent_panel_sort = "priority"
 
+# A wider sidebar, so space and agent rows aren't truncated. herdr sizes it to
+# the workspace names between min and max, starting from sidebar_width; the
+# defaults are 26 (18–36). With no auto-split pane on the right any more, the
+# room is better spent here.
+sidebar_width = 40
+sidebar_min_width = 32
+sidebar_max_width = 48
+
 # A distinct glyph per agent state (blocked, working, done, idle, unknown)
 # rather than the default colour dots.
 status_indicators = "symbols"

@@ -369,7 +369,9 @@ config — pinning only:
 
 - `prefix = "ctrl+a"` to match the tmux prefix,
 - the `tokyo-night` theme,
-- `onboarding = false`.
+- `onboarding = false`,
+- a wider sidebar (`sidebar_width` and its min and max),
+- symbol status indicators and OS notifications instead of herdr's toast.
 
 Run `herdr --default-config` to see everything else you could set, and
 `herdr server reload-config` (or `prefix+shift+r`) after editing.

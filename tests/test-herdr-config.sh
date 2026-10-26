@@ -24,6 +24,7 @@ fi
 grep -q '^onboarding = false' "$CONF" && pass "onboarding disabled" || fail "onboarding disabled"
 grep -q 'name = "tokyo-night"' "$CONF" && pass "theme tokyo-night" || fail "theme tokyo-night"
 grep -q 'prefix = "ctrl+a"' "$CONF" && pass "prefix ctrl+a" || fail "prefix ctrl+a"
+grep -q '^sidebar_width = ' "$CONF" && pass "sidebar width pinned" || fail "sidebar width pinned"
 
 # Runtime state is git-ignored (doctor.sh relies on this to skip it)
 for f in herdr.log herdr.sock session.json .plugins.lock release-notes.json session-snapshots/session-0.json; do
