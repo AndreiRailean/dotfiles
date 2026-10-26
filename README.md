@@ -29,9 +29,10 @@ Then restart your shell (or `exec "$SHELL"`).
    cask on macOS; a release download into `~/.local/share/fonts` elsewhere),
    Ghostty (macOS), and (on WSL) `win32yank` for clipboard bridging. Terminal
    font selection is a manual step it prints.
-6. Install Starship through `update.sh --missing`, and end with `update.sh`'s
-   version report (see [Updating tools](#updating-tools)). herdr, Claude Code
-   and the other optional tools are added per machine with `update.sh --add`.
+6. Install Starship through `update.sh --missing`. Then, in a terminal, list
+   the optional tools that aren't installed (herdr, Claude Code and the rest)
+   and install the ones you name; enter skips them. It ends with `update.sh`'s
+   version report (see [Updating tools](#updating-tools)).
 
 ## Updating tools
 
@@ -43,6 +44,7 @@ is always safe. Upgrading the tools that no package manager looks after is
 ./update.sh                # installed vs latest; changes nothing
 ./update.sh --apply        # install what's missing, upgrade what's behind
 ./update.sh --add deno     # put an optional tool on this machine
+./update.sh --ask          # pick from the optional tools that aren't here
 ```
 
 | Tool | Default or optional | Comes from | Upgraded by |
@@ -55,7 +57,9 @@ is always safe. Upgrading the tools that no package manager looks after is
 | lazygit | optional | GitHub release, sha256-checked | a fresh release download |
 
 Optional tools need no per-machine list. A tool on `PATH` is reported and
-upgraded, so installing one is the opt-in.
+upgraded, so installing one is the opt-in. Nothing remembers a tool you
+declined: `install.sh` offers it again on the next run, and pressing enter
+skips it again.
 
 Only a copy under `$HOME` is upgraded. A tool that apt, Homebrew or pacman
 installed is reported with its owner and left to that package manager, because
