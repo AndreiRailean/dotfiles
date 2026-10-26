@@ -259,4 +259,28 @@ assert_contains "$("$H/.local/bin/lazygit" --version 2>&1)" "version=0.66.2" "--
 out="$(run --add bogus)"; rc=$?
 assert_eq "$rc" 2 "--add with an unknown tool is a usage error"
 
+# ── --ask: offers what's absent, installs what's named ────────
+fresh; rm "$T/sys/lazygit"
+out="$(printf 'lazygit bogus herdr\n' | run --ask)"; rc=$?
+assert_eq "$rc" 0 "--ask exits 0 after installing"
+assert_contains "$out" "lazygit   terminal UI for git" "--ask lists an absent optional tool with what it is"
+assert_not_contains "$out" "herdr     agent" "--ask doesn't offer a tool that's installed"
+assert_contains "$("$H/.local/bin/lazygit" --version 2>&1)" "version=0.66.2" "--ask installs the tool named"
+assert_contains "$out" "skipping 'bogus'" "--ask says it skipped a name it didn't offer"
+assert_contains "$out" "skipping 'herdr'" "--ask won't reinstall a tool that's present"
+
+fresh; rm "$T/sys/lazygit"
+out="$(printf '\n' | run --ask)"; rc=$?
+assert_eq "$rc" 0 "--ask with no answer exits 0"
+[ ! -e "$H/.local/bin/lazygit" ] && pass "--ask with no answer installs nothing" || fail "--ask with no answer installs nothing"
+out="$(run --ask </dev/null)"; rc=$?
+assert_eq "$rc" 0 "--ask with stdin closed exits 0"
+
+fresh; for t in deno fnm claude; do tool "$H/.local/bin/$t" "$t" 1.0.0; done
+out="$(run --ask </dev/null)"
+assert_eq "$out" "" "--ask is silent when every optional tool is installed"
+
+grep -q '\[ -t 0 \] && \[ -t 1 \]' "$REPO/install.sh" && grep -q 'update.sh" --ask' "$REPO/install.sh" \
+  && pass "install.sh asks only from a terminal" || fail "install.sh asks only from a terminal"
+
 finish

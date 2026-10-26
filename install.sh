@@ -456,6 +456,12 @@ fi
 # fatal: a tool that fails to install is reported and the rest carries on.
 "$DOTFILES_DIR/update.sh" --missing || echo "!! some tools failed to install — see above, then run ./update.sh"
 
+# Offer the optional tools that aren't here, but only to a person: piped or in
+# CI there's nobody to answer, and the defaults are all a machine needs.
+if [ -t 0 ] && [ -t 1 ]; then
+  "$DOTFILES_DIR/update.sh" --ask || echo "!! some tools failed to install — see above, then run ./update.sh"
+fi
+
 # On macOS, update.sh installs herdr from Homebrew when it's added; brew
 # services needs to know.
 HERDR_BREW=0

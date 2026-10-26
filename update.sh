@@ -5,6 +5,7 @@
 #   ./update.sh --missing       install the default tools that are absent
 #   ./update.sh --apply         install what's missing, upgrade what's behind
 #   ./update.sh --add <tool>…   install an optional tool on this machine
+#   ./update.sh --ask           list the absent optional tools, install those named
 #
 # install.sh runs --missing and then the report, so this file is the one place
 # that knows where each of these tools comes from — and re-running install.sh
@@ -12,7 +13,7 @@
 # deliberate --apply.
 #
 # DEFAULT tools go on every machine. OPTIONAL tools go only where you ask with
-# --add; after that, presence is the opt-in — a tool on PATH is reported and
+# --add or pick them from --ask; after that, presence is the opt-in — a tool on PATH is reported and
 # upgraded like any other, so there is no per-machine list to keep.
 #
 # Only a binary under $HOME is upgraded: that is where this script and the
@@ -41,7 +42,7 @@ FNM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
 PATH="$BIN:$FNM_DIR:$HOME/.deno/bin:$PATH"
 
 usage() {
-  sed -n '2,7s/^# \{0,1\}//p' "${BASH_SOURCE[0]}" >&2
+  sed -n '2,8s/^# \{0,1\}//p' "${BASH_SOURCE[0]}" >&2
   echo "  default tools:  $DEFAULT_TOOLS" >&2
   echo "  optional tools: $OPTIONAL_TOOLS" >&2
   exit "${1:-2}"
@@ -53,6 +54,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --missing) MODE=missing ;;
     --apply)   MODE=apply ;;
+    --ask)     MODE=ask ;;
     --add)
       MODE=add; shift
       [ $# -gt 0 ] || usage
@@ -326,8 +328,43 @@ upgrade_tool() {
   esac && runs "$1"
 }
 
+# describe <tool>: one line for the --ask list.
+describe() {
+  case "$1" in
+    herdr)   echo "agent-aware terminal multiplexer" ;;
+    deno)    echo "JavaScript and TypeScript runtime" ;;
+    fnm)     echo "Node.js version manager" ;;
+    claude)  echo "Claude Code" ;;
+    lazygit) echo "terminal UI for git" ;;
+  esac
+}
+
 # ── Main ─────────────────────────────────────────────────────
 BREWED_HERDR=0
+
+# --ask: offer the optional tools that aren't here, read the answer from
+# stdin, and carry on as --add with whatever was named. Silent when there's
+# nothing to offer. install.sh only calls it from a terminal, so a declined
+# tool costs one enter on each re-run, and no list of declines is kept.
+if [ "$MODE" = ask ]; then
+  absent=""
+  for t in $OPTIONAL_TOOLS; do [ -n "$(version "$t")" ] || absent="$absent $t"; done
+  [ -n "$absent" ] || exit 0
+  echo "Optional tools not on this machine:"
+  for t in $absent; do printf '  %-9s %s\n' "$t" "$(describe "$t")"; done
+  printf 'Install which? Names separated by spaces, or enter for none: '
+  read -r answer || answer=""
+  echo
+  ADD=" "
+  for t in $answer; do
+    case " $absent " in
+      *" $t "*) ADD="$ADD$t " ;;
+      *)        echo "  skipping '$t': not one of the above" ;;
+    esac
+  done
+  [ "$ADD" != " " ] || exit 0
+  MODE=add
+fi
 is_optional() { case " $OPTIONAL_TOOLS " in *" $1 "*) return 0 ;; esac; return 1; }
 
 row() { printf '  %-9s %-10s %s\n' "$1" "${2:--}" "$3"; }
