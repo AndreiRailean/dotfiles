@@ -192,6 +192,25 @@ prune_retired_roots() {
   done
 }
 
+# quiet_restow filters `stow -v --restow` output down to what changed. A restow
+# plans an UNLINK of every link and then a LINK of each again, tagged "(reverts
+# previous action)": a no-op on disk, but -v prints both, about 60 lines per run.
+# Those pairs are dropped. A new link, a removed one, and errors still show:
+# that's why -v stays. Paths can hold spaces, so they're cut at " => ".
+quiet_restow() {
+  awk '{ line[NR] = $0 }
+    /^LINK: .* \(reverts previous action\)$/ {
+      p = $0; sub(/^LINK: /, "", p); sub(/ => .*/, "", p); undone[p] = 1 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        s = line[i]
+        if (s ~ /\(reverts previous action\)$/) continue
+        if (s ~ /^UNLINK: /) { p = s; sub(/^UNLINK: /, "", p); if (p in undone) continue }
+        print s
+      }
+    }'
+}
+
 # ── Symlink packages into $HOME ──────────────────────────────
 # --no-folding: create real directories with per-file symlinks rather than
 # symlinking whole dirs into the repo. This keeps ~/.config/shell (etc.) a
@@ -202,7 +221,7 @@ for pkg in shell git nvim tmux starship herdr claude; do
   [ -d "$pkg" ] || continue
   echo "Stowing $pkg..."
   clear_stow_conflicts "$pkg"
-  stow -v --no-folding --target="$HOME" --restow "$pkg"
+  stow -v --no-folding --target="$HOME" --restow "$pkg" 2>&1 | quiet_restow
   prune_dead_links "$pkg"
 done
 prune_retired_roots
