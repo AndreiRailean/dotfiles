@@ -471,39 +471,6 @@ if [ -t 0 ] && [ -t 1 ]; then
   "$DOTFILES_DIR/update.sh" --ask || echo "!! some tools failed to install — see above, then run ./update.sh"
 fi
 
-# On macOS, update.sh installs herdr from Homebrew when it's added; brew
-# services needs to know.
-HERDR_BREW=0
-if [ "$OS" = "Darwin" ] && command -v brew &>/dev/null && brew list --formula herdr &>/dev/null; then
-  HERDR_BREW=1
-fi
-
-# Keep the herdr server running from login (Homebrew's launchd service), so
-# sessions don't depend on a client having been opened first.
-#
-# Not while another server is up: herdr allows one server per user, and a
-# second one exits with "herdr server is already running". That's usually the
-# server a herdr client spawned on its own, which owns every open pane, so it is
-# never stopped from here — and starting the service anyway would have launchd
-# respawn it every few seconds until that server went away.
-herdr_server_running() {
-  # ps, not pgrep: pgrep -f misses processes under some sandboxes.
-  ps -axo args= | awk '$1 ~ /(^|\/)herdr$/ && $2 == "server" { f = 1 } END { exit !f }'
-}
-if [ "$HERDR_BREW" -eq 1 ]; then
-  herdr_svc="$(brew services list 2>/dev/null | awk '$1 == "herdr" { print $2 }')"
-  if [ "$herdr_svc" = "started" ]; then
-    :
-  elif herdr_server_running; then
-    echo "!! herdr server is running outside brew services, so it won't restart at login."
-    echo "   When no agents need it: herdr server stop && brew services start herdr"
-    echo "   (stopping the server closes every herdr pane) — or just re-run ./install.sh then."
-  else
-    brew services start herdr \
-      || echo "!! could not start the herdr service — run: brew services start herdr"
-  fi
-fi
-
 # ── Nerd Font (best-effort; see note printed at end) ─────────
 # macOS gets it from Homebrew: the cask installs into ~/Library/Fonts, where
 # macOS actually looks, and `brew upgrade` keeps it current. The Linux route

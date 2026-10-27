@@ -240,7 +240,7 @@ assert_not_contains "$(cat "$T/calls" 2>/dev/null)" "brew install herdr" "macOS 
 out="$(run --add herdr)"
 assert_contains "$(cat "$T/calls" 2>/dev/null)" "brew install herdr" "macOS --add herdr installs it from Homebrew"
 assert_contains "$out" "herdr 0.9.5 installed from Homebrew" "--add herdr says where it came from"
-assert_contains "$out" "re-run ./install.sh" "--add herdr says how to start its brew service"
+assert_not_contains "$out" "brew services" "--add herdr doesn't send you to a brew service herdr's formula doesn't have"
 assert_not_contains "$out" "already installed" "--add herdr doesn't call a fresh install 'already installed'"
 
 # A herdr from the official installer is handed to Homebrew, and install.sh

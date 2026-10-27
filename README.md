@@ -357,19 +357,12 @@ natively (what the tmux setup above approximates with hooks). It's the
 agent-focused driver; **tmux stays** for plain and SSH-only boxes.
 
 It's optional: `./update.sh --add herdr` puts it on a machine. That uses
-Homebrew on macOS (`brew install herdr`; the next `install.sh` run then does
-`brew services start herdr` so the server is up from login) and the official
-installer elsewhere. Its config is stowed everywhere, which is harmless where
-herdr isn't installed.
+Homebrew on macOS (`brew install herdr`) and the official installer elsewhere.
+There's no service: a herdr client starts the server when it needs one. Its
+config is stowed everywhere, which is harmless where herdr isn't installed.
 There's no version pin: `brew upgrade herdr` or `herdr update` keeps it
 current. If an earlier run left the official installer's copy in
 `~/.local/bin`, a macOS run removes it so brew's is the only one.
-
-`brew services start` is skipped while another herdr server is running — there
-can only be one, and the one a herdr client spawned owns every open pane.
-`install.sh` prints how to hand over (`herdr server stop && brew services start
-herdr`, which closes those panes), and `doctor.sh` keeps reporting it until
-it's done.
 
 **Managed config** lives at `~/.config/herdr/config.toml` (a normal Stow
 package). It's deliberately minimal — herdr auto-detects agents with zero

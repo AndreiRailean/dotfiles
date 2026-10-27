@@ -42,18 +42,10 @@ if [ "$ADOPT" -eq 0 ] && command -v nvim >/dev/null 2>&1 && command -v vim >/dev
 fi
 
 # ── herdr from Homebrew (report-only; never affects drift) ───
-# Where herdr came from Homebrew, install.sh starts its server as a brew
-# service; a stopped one only shows up at the next login, so look for it.
+# Where herdr came from Homebrew, a second copy in ~/.local/bin shadows it.
 if [ "$ADOPT" -eq 0 ] && command -v herdr >/dev/null 2>&1; then
   if [ "$(uname -s)" = "Darwin" ]; then
     if command -v brew >/dev/null 2>&1 && brew list --formula herdr >/dev/null 2>&1; then
-      herdr_svc="$(brew services list 2>/dev/null | awk '$1 == "herdr" { print $2 }')"
-      if [ "$herdr_svc" != "started" ]; then
-        echo "▲ The herdr server isn't running as a brew service (status: ${herdr_svc:-none}),"
-        echo "    so it won't be up at login."
-        echo "    fix: re-run ./install.sh (it says what to do if another herdr server is running)"
-        echo
-      fi
       if [ -f "$HOME/.local/bin/herdr" ] && [ ! -L "$HOME/.local/bin/herdr" ]; then
         echo "▲ ~/.local/bin/herdr shadows Homebrew's herdr, and the two update separately."
         echo "    fix: re-run ./install.sh (removes the ~/.local/bin copy)"
