@@ -297,8 +297,6 @@ herdr_from_brew() {
     brew install herdr \
       || { echo "!! brew install herdr failed — falling back to the official installer"; return 0; }
     BREWED_HERDR=1
-    # install.sh starts the service itself right after its --missing run.
-    [ "$MODE" != add ] || echo "   re-run ./install.sh to start herdr's server at login (brew services)"
   fi
   if [ -f "$BIN/herdr" ] && [ ! -L "$BIN/herdr" ]; then
     rm -f "$BIN/herdr"
