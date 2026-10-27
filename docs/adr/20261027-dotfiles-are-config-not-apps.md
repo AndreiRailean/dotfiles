@@ -32,7 +32,14 @@ real hosts:
 - The macOS install branches had never run before (#36), and the first run
   found a bug.
 
-What a machine needs installed depends on what the machine is for, and the
+The user runs two kinds of machine:
+
+- **workstations:** a desktop or laptop with a GUI, used to reach the network
+  (WSL on a Windows desktop, the home Mac);
+- **network hosts:** machines with no GUI, each split by what it does
+  (minirat hosts a VM; minirat-dev is the VM, where development happens).
+
+What a machine needs installed depends on its kind and its job, and the
 machines repo already describes that per host. The config is the part that's
 the same everywhere.
 
@@ -47,6 +54,12 @@ the same everywhere.
   only servers.
 - **Config must be harmless when its app is missing,** as herdr's
   `config.toml` already is. Shell init that calls a tool checks for it first.
+  That's what lets one set of config serve both kinds of machine: Ghostty's
+  config can sit unused on a host with no GUI, while the workstation's
+  definition installs Ghostty and the Nerd Font.
+- **The dotfiles go on every machine where the user works in a shell:** every
+  workstation, and a network host whose job is development. A network host
+  with any other job doesn't need them.
 
 ## Consequences
 
