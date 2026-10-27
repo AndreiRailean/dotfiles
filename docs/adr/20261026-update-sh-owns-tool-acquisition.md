@@ -1,10 +1,11 @@
 ---
 type: ADR
-status: accepted
+status: superseded
 date: 2026-10-26
 summary: Tools no package manager looks after are installed and upgraded only by
   update.sh, which install.sh calls with --missing; optional tools opt in by
   being installed, and only copies under $HOME are ever upgraded.
+superseded_by: 20261027-dotfiles-are-config-not-apps
 ---
 
 # update.sh owns the tools no package manager looks after
