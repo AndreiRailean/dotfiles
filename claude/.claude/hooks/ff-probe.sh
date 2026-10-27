@@ -67,7 +67,7 @@ case "$mode" in
       *'not mergeable'*|*'not in a mergeable state'*|*'Draft pull request'*|*'will be automatically merged'*) exit 0 ;;
     esac
 
-    emit PostToolUse "A PR merge was attempted. If it succeeded, fast-forward the main checkout so the next session starts from it: git -C <main checkout> fetch origin --prune, then git -C <main checkout> merge --ff-only origin/main. Use git -C rather than cd, since you are probably in a worktree. If it refuses, or the checkout is dirty, report that rather than forcing it."
+    emit PostToolUse "A PR merge was attempted. If it succeeded, fast-forward the main checkout so the next session starts from it: git -C <main checkout> fetch origin --prune, then git -C <main checkout> merge --ff-only origin/main. Use git -C rather than cd, since you are probably in a worktree. If it refuses, report that rather than forcing it. If the checkout is dirty, leave it alone and show the user the diff, even when it looks identical to what just merged."
     ;;
   *)
     exit 0
