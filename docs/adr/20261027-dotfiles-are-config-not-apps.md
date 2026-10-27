@@ -34,10 +34,16 @@ real hosts:
 
 The user runs two kinds of machine:
 
-- **workstations:** a desktop or laptop with a GUI, used to reach the network
-  (WSL on a Windows desktop, the home Mac);
-- **network hosts:** machines with no GUI, each split by what it does
-  (minirat hosts a VM; minirat-dev is the VM, where development happens).
+- **workstations:** the desktop or laptop the user sits at, used to reach the
+  network (the Windows desktop with WSL, the home Mac);
+- **network hosts:** machines the user reaches rather than sits at, each split
+  by what it does (minirat hosts a VM; minirat-dev is the VM, where
+  development happens). minirat has a GUI the user opens now and then, but
+  it's still a host: the desk is the Windows box.
+
+Shell work, and Claude Code with it, mostly happens on a Linux VM: minirat-dev
+at work, and a VM at home. The home Mac is a workstation, but the user doesn't
+work in its own shell.
 
 What a machine needs installed depends on its kind and its job, and the
 machines repo already describes that per host. The config is the part that's
@@ -50,16 +56,16 @@ the same everywhere.
   links, `doctor.sh`).
 - **They stop installing apps.** Tool acquisition, optional tools, upgrades,
   casks, PPAs and services move to each machine's definition in the machines
-  repo. That includes the machines where work happens (WSL, the home Mac), not
-  only servers.
+  repo. That includes workstations, not only servers.
 - **Config must be harmless when its app is missing,** as herdr's
   `config.toml` already is. Shell init that calls a tool checks for it first.
-  That's what lets one set of config serve both kinds of machine: Ghostty's
-  config can sit unused on a host with no GUI, while the workstation's
+  That's what lets one set of config serve every machine it goes on: Ghostty's
+  config can sit unused on a host with no GUI, while a workstation's
   definition installs Ghostty and the Nerd Font.
-- **The dotfiles go on every machine where the user works in a shell:** every
-  workstation, and a network host whose job is development. A network host
-  with any other job doesn't need them.
+- **The dotfiles go on every machine where the user works in a shell:** WSL on
+  the Windows desktop, and a network host whose job is development
+  (minirat-dev, the VM at home). A machine where the user doesn't work in a
+  shell (minirat, the home Mac) doesn't need them.
 
 ## Consequences
 
@@ -68,11 +74,13 @@ the same everywhere.
   minirat-dev relies on `update.sh --add` for fnm and Claude Code today, and
   the machines repo's own ADR (20261026-plain-scripts-per-host) says so. It
   changes in the same migration.
-- The machines repo currently leaves clients out of scope. WSL and the home
-  Mac would need host definitions there.
-- On the home Mac, which has years of its own dotfiles, adopting this repo
-  becomes a config-only question. Stow refuses to overwrite a file it doesn't
-  own, so each conflict is a decision made by hand rather than an install that
-  replaces things.
+- The machines repo currently leaves clients out of scope. WSL and the home VM
+  would need definitions there.
+- Every machine the dotfiles go on runs Linux. The macOS branches in
+  `install.sh`, `update.sh` and `doctor.sh` serve no current target, and are
+  candidates for removal in the migration. What a Mac workstation still wants,
+  such as its terminal app and font, belongs in that Mac's definition. The
+  home Mac's years of its own dotfiles never have to be reconciled with this
+  repo.
 - The herdr brew-service failure is fixed by deleting that step, not by
   repairing it.
