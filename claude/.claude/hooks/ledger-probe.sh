@@ -61,8 +61,13 @@ done
 ledger="${LEDGER_SH:-$HOME/.claude/skills/wrap-up/ledger.sh}"
 [ -r "$ledger" ] || exit 0
 
-# Every field in one pass, each quoted for the shell by jq.
-fields=$(printf '%s' "$payload" | jq -r '@sh "sid=\(.session_id // "") event=\(.hook_event_name // "") reason=\(.reason // "") transcript=\(.transcript_path // "") cwd=\(.cwd // "") source=\(.source // "")"' 2>/dev/null) || exit 0
+# Every field in one pass, each quoted for the shell by @sh. Only the first
+# JSON value counts, and a field that is not a string or number reads as empty:
+# @sh writes an array as several words, which the eval would run.
+fields=$(printf '%s' "$payload" | jq -rn '
+  def s: if type == "string" or type == "number" then tostring else "" end;
+  (first(inputs) // {}) as $p | if ($p | type) == "object" then $p else {} end
+  | @sh "sid=\(.session_id | s) event=\(.hook_event_name | s) reason=\(.reason | s) transcript=\(.transcript_path | s) cwd=\(.cwd | s) source=\(.source | s)"' 2>/dev/null) || exit 0
 eval "$fields"
 
 note() {

@@ -63,6 +63,12 @@ ledger_path() {
 		echo "no CLAUDE_CODE_SESSION_ID, so no ledger of this session's; name one" >&2
 		return 1
 	fi
+	case "$sid" in
+	*/* | . | ..)
+		echo "not a session ID: $sid" >&2
+		return 1
+		;;
+	esac
 	printf '%s/%s\n' "$state" "$sid"
 }
 

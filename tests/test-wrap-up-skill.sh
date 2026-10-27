@@ -309,9 +309,35 @@ for t in /usr/bin/* /bin/*; do
   [ "$n" = jq ] || [ -e "$TMP/docbin/$n" ] || ln -s "$t" "$TMP/docbin/$n"
 done
 out="$(HOME="$TMP/dochome" PATH="$TMP/docbin" bash "$REPO/doctor.sh" 2>&1)"
+assert_not_contains "$out" "jq is not" "doctor.sh says nothing of jq where Claude is not installed, ~/.claude or not"
+mkdir -p "$TMP/dochome/.local/bin"
+printf '#!/bin/sh\n' >"$TMP/dochome/.local/bin/claude"
+chmod +x "$TMP/dochome/.local/bin/claude"
+out="$(HOME="$TMP/dochome" PATH="$TMP/docbin" bash "$REPO/doctor.sh" 2>&1)"
 assert_contains "$out" "jq is not" "doctor.sh reports Claude without jq"
 out="$(HOME="$TMP/dochome" bash "$REPO/doctor.sh" 2>&1)"
 assert_not_contains "$out" "jq is not" "and is quiet where jq is installed"
+
+# Payloads Claude does not send today still leave the probe quiet or right,
+# and never run a value as a command.
+for bad in '{"session_id":["x","touch","'"$TMP"'/pwned"],"cwd":"/tmp"}' \
+           '{"session_id":"x","cwd":["/tmp","touch","'"$TMP"'/pwned"]}' \
+           '{"session_id":"x","cwd":{"a":1},"source":{}}' \
+           '{"session_id":"x"}
+{"cwd":"/tmp"}' '' '   ' '"str"' '[1,2]' '{"session_id":"x","cwd":"/tmp"'; do
+  out="$(printf '%s' "$bad" | CLAUDE_CODE_SESSION_ID=envsid LEDGER_SH="$L" sh "$PROBE")"; rc=$?
+  [ "$rc" = 0 ] || fail "exit 0 on payload: $bad (got $rc)"
+  [ -z "$out" ] || printf '%s' "$out" | jq -e . >/dev/null 2>&1 || fail "only JSON on stdout for payload: $bad"
+done
+[ ! -e "$TMP/pwned" ] && pass "no payload value runs as a command" || fail "no payload value runs as a command"
+pass "odd payloads exit 0 and print only JSON"
+out="$(printf '' | CLAUDE_CODE_SESSION_ID=envsid LEDGER_SH="$L" sh "$PROBE")"
+assert_contains "$out" "ledger.sh taken" "empty stdin falls back to the session ID in the environment"
+out="$(printf '%s\n%s' '{"hook_event_name":"SessionEnd","session_id":"m1","reason":"clear","transcript_path":"/t/m"}' '{"cwd":"/tmp"}' | LEDGER_SH="$L" CLAUDE_PID=5151 sh "$PROBE")"
+assert_eq "$out" "" "with two JSON values the first one counts: a SessionEnd prints nothing"
+[ -e "$TMP/state/claude/ledger/cleared.5151" ] && pass "and still leaves its handoff" || fail "and still leaves its handoff"
+out="$(CLAUDE_CODE_SESSION_ID=../escape sh "$L" taken 'x' 2>&1)"; rc=$?
+assert_contains "$out$rc" "not a session ID" "a session ID cannot name a path outside the ledger directory"
 
 # Without CLAUDE_PID (older claude), the nearest ancestor named claude links the two.
 mkdir -p "$TMP/bin"

@@ -92,7 +92,9 @@ fi
 # it say nothing, as config must when its app is missing. So the only place
 # the gap shows is here. jq is installed with Claude by the machine's
 # definition, not by the dotfiles: docs/adr/20261027-dotfiles-are-config-not-apps.md.
-if [ "$ADOPT" -eq 0 ] && { command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ]; } \
+# ~/.claude itself proves nothing: stowing the claude package makes it on every
+# machine, Claude or not.
+if [ "$ADOPT" -eq 0 ] && { command -v claude >/dev/null 2>&1 || [ -x "$HOME/.local/bin/claude" ]; } \
    && ! command -v jq >/dev/null 2>&1; then
   echo "▲ Claude is here but jq is not, so its status line and the wrap-up ledger probe are silent."
   echo "    fix: install jq with Claude, in this machine's definition"
