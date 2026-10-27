@@ -87,6 +87,18 @@ if [ "$ADOPT" -eq 0 ] && [ -r claude/.claude/settings.json ]; then
              | sed 's|^\$HOME/||' | sort -u)
 fi
 
+# ── jq beside Claude (report-only; never affects drift) ─────
+# The status line and ledger-probe.sh read their payload with jq, and without
+# it say nothing, as config must when its app is missing. So the only place
+# the gap shows is here. jq is installed with Claude by the machine's
+# definition, not by the dotfiles: docs/adr/20261027-dotfiles-are-config-not-apps.md.
+if [ "$ADOPT" -eq 0 ] && { command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ]; } \
+   && ! command -v jq >/dev/null 2>&1; then
+  echo "▲ Claude is here but jq is not, so its status line and the wrap-up ledger probe are silent."
+  echo "    fix: install jq with Claude, in this machine's definition"
+  echo
+fi
+
 untracked=()   # "target|pkg|rel"
 broken=()      # dangling symlinks
 missing=()     # repo files not linked into $HOME

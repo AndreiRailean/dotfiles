@@ -256,6 +256,8 @@ out="$(start_ c7 clear "$TMP/plain")"
 printf '%s' "$out" | jq -e . >/dev/null 2>&1 && pass "the /clear note is valid JSON" || fail "the /clear note is valid JSON: $out"
 assert_contains "$out" "1 open item(s) were carried" "a tab in the transcript path does not shift the count"
 assert_contains "$(cat "$TMP/state/claude/ledger/c7")" 'c"6.jsonl' "and a quote in it is kept in the ledger"
+ctx="$(printf '%s' "$out" | jq -r .hookSpecificOutput.additionalContext)"
+assert_contains "$ctx" "$(printf '/t/my\tdir/c"6.jsonl')" "and the note names the path exactly"
 end_ c7 clear '' >/dev/null
 out="$(start_ c8 clear "$TMP/plain")"
 assert_contains "$out" "1 open item(s) were carried" "nor does an empty transcript path"
@@ -286,6 +288,30 @@ assert_not_contains "$out" "it was c9" "a stale handoff is not taken"
 assert_contains "$out" "no handoff" "and a /clear with none says so, since its ledger reads 0 open"
 printf '%s' "$out" | jq -e . >/dev/null 2>&1 && pass "that note is valid JSON" || fail "that note is valid JSON: $out"
 unset CLAUDE_PID
+
+# jq comes with Claude where these skills run; where it does not, the probe
+# says nothing. The same PATH with jq added fires, so nothing else silenced it.
+mkdir -p "$TMP/nojq" "$TMP/withjq"
+for t in sh awk sed grep find ps tr rm mkdir dirname git cat env; do
+  ln -s "$(command -v "$t")" "$TMP/nojq/$t"
+  ln -s "$(command -v "$t")" "$TMP/withjq/$t"
+done
+ln -s "$(command -v jq)" "$TMP/withjq/jq"
+out="$(printf '{"session_id":"j1","cwd":"%s"}' "$TMP/plain" | PATH="$TMP/nojq" LEDGER_SH="$L" "$TMP/nojq/sh" "$PROBE")"; rc=$?
+assert_eq "$out$rc" "0" "without jq the probe is silent and exits 0"
+out="$(printf '{"session_id":"j1","cwd":"%s"}' "$TMP/plain" | PATH="$TMP/withjq" LEDGER_SH="$L" "$TMP/withjq/sh" "$PROBE")"
+assert_contains "$out" "ledger.sh taken" "with jq on the same PATH it fires"
+
+# Silent is right for the probe, so doctor.sh is where a missing jq shows.
+mkdir -p "$TMP/dochome/.claude" "$TMP/docbin"
+for t in /usr/bin/* /bin/*; do
+  n=${t##*/}
+  [ "$n" = jq ] || [ -e "$TMP/docbin/$n" ] || ln -s "$t" "$TMP/docbin/$n"
+done
+out="$(HOME="$TMP/dochome" PATH="$TMP/docbin" bash "$REPO/doctor.sh" 2>&1)"
+assert_contains "$out" "jq is not" "doctor.sh reports Claude without jq"
+out="$(HOME="$TMP/dochome" bash "$REPO/doctor.sh" 2>&1)"
+assert_not_contains "$out" "jq is not" "and is quiet where jq is installed"
 
 # Without CLAUDE_PID (older claude), the nearest ancestor named claude links the two.
 mkdir -p "$TMP/bin"

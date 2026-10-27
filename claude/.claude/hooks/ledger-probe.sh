@@ -39,6 +39,14 @@
 # the first line taken. It must always exit 0. A SessionStart hook that fails
 # is noise at the top of every session.
 #
+# It needs jq, to read the payload and to write the note: a transcript path is
+# copied from one into the other, and only a real JSON parser and encoder carry
+# any character in it across. jq comes with Claude on every machine these
+# skills run on (the machine's definition installs it, since the dotfiles are
+# config, not apps: docs/adr/20261027-dotfiles-are-config-not-apps.md). Where
+# it is missing the probe says nothing, as config must when its app is absent,
+# and doctor.sh reports it.
+#
 # Usage: ledger-probe.sh   (SessionStart or SessionEnd hook payload on stdin)
 
 set -u
@@ -50,38 +58,33 @@ while IFS= read -r line || [ -n "$line" ]; do
   line=''
 done
 
-# jq where it is installed and the payload parses; the sed fallback stops at a
-# quote in the value.
-field() {
-  command -v jq >/dev/null 2>&1 &&
-    printf '%s' "$payload" | jq -r --arg k "$1" '.[$k] // empty | tostring' 2>/dev/null ||
-    printf '%s' "$payload" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p"
-}
-
 ledger="${LEDGER_SH:-$HOME/.claude/skills/wrap-up/ledger.sh}"
 [ -r "$ledger" ] || exit 0
 
-sid=$(field session_id)
+# Every field in one pass, each quoted for the shell by jq.
+fields=$(printf '%s' "$payload" | jq -r '@sh "sid=\(.session_id // "") event=\(.hook_event_name // "") reason=\(.reason // "") transcript=\(.transcript_path // "") cwd=\(.cwd // "") source=\(.source // "")"' 2>/dev/null) || exit 0
+eval "$fields"
+
+note() {
+  jq -cn --arg c "$1" '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $c}}'
+}
+
 [ -n "$sid" ] || sid=${CLAUDE_CODE_SESSION_ID:-}
 [ -n "$sid" ] || exit 0
 
-if [ "$(field hook_event_name)" = SessionEnd ]; then
-  [ "$(field reason)" = clear ] && sh "$ledger" clear-out "$sid" "$(field transcript_path)" >/dev/null 2>&1
+if [ "$event" = SessionEnd ]; then
+  [ "$reason" = clear ] && sh "$ledger" clear-out "$sid" "$transcript" >/dev/null 2>&1
   exit 0
 fi
 
-cwd=$(field cwd)
 [ -n "$cwd" ] && [ -d "$cwd" ] || cwd="$PWD"
 
 cleared=''
-if [ "$(field source)" = clear ]; then
+if [ "$source" = clear ]; then
   if handed=$(sh "$ledger" clear-in "$sid" 2>/dev/null); then
     { read -r old; read -r transcript; read -r carried; } <<EOF
 $handed
 EOF
-    # Quotes, backslashes and control characters would break the JSON this is
-    # printed into.
-    transcript=$(printf '%s' "$transcript" | tr -d '"\\\000-\037')
     cleared="This session began with /clear, which gave it a new session ID; it was $old, and anything recorded under that ID is this session's too."
     [ "${carried:-0}" -gt 0 ] 2>/dev/null && cleared="$cleared $carried open item(s) were carried from that ledger into this one."
     [ -n "$transcript" ] && cleared="$cleared The conversation before the /clear is at $transcript; a /wrap-up reads it for what existed only there."
@@ -93,7 +96,7 @@ fi
 
 if sh "$ledger" repo-ledger "$cwd" >/dev/null 2>&1; then
   [ -n "$cleared" ] || exit 0
-  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$cleared"
+  note "$cleared"
   exit 0
 fi
 
@@ -104,7 +107,6 @@ if [ -f "$path" ]; then
   [ -n "$open" ] && [ "$open" -gt 0 ] && resumed=" It already holds $open open item(s) from earlier in this session: sh ~/.claude/skills/wrap-up/ledger.sh open lists them."
 fi
 
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
-  "Keep a ledger for /wrap-up. Each time this session makes something that outlives a command (a branch, worktree, stash entry, PR, server, background task, Monitor or cron, or a file outside the repo and your scratchpad), record it at once: sh ~/.claude/skills/wrap-up/ledger.sh taken '<kind> <item>', e.g. 'branch feat/x' or 'server :5173'. Nothing else can tell later which of these are this session's.$resumed${cleared:+ $cleared}"
+note "Keep a ledger for /wrap-up. Each time this session makes something that outlives a command (a branch, worktree, stash entry, PR, server, background task, Monitor or cron, or a file outside the repo and your scratchpad), record it at once: sh ~/.claude/skills/wrap-up/ledger.sh taken '<kind> <item>', e.g. 'branch feat/x' or 'server :5173'. Nothing else can tell later which of these are this session's.$resumed${cleared:+ $cleared}"
 
 exit 0

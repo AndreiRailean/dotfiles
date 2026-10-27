@@ -106,6 +106,9 @@ The probe also runs at `SessionEnd`, so a `/clear`, which starts a new session
 ID, carries the open items across; the conversation it drops is why a `/clear`
 is safe only after a wrap-up
 ([docs/adr/20261025-clear-is-safe-only-after-a-wrap-up.md](docs/adr/20261025-clear-is-safe-only-after-a-wrap-up.md)).
+Like the status line, the probe reads and writes JSON with `jq`, which a
+machine's definition installs alongside Claude; without it the probe is silent
+and `doctor.sh` says so.
 
 Not to be confused with this repo's own root `CLAUDE.md`, which is not stowed
 anywhere. Since 2.1.277 Claude Code loads `AGENTS.md` on its own, but only
