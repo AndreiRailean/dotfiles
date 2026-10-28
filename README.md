@@ -22,7 +22,10 @@ Then restart your shell (or `exec "$SHELL"`).
 3. Append a one-line loader to `~/.bashrc` / `~/.zshrc` (if they exist; the
    login shell's rc is created if missing, e.g. `~/.zshrc` on a fresh Mac),
    sourcing the managed shell entrypoint. Your distro rc and its defaults are
-   left intact.
+   left intact. `~/.zshenv` gets one too, so a command run over SSH
+   (`ssh host 'cmd'`) gets `path.sh`'s PATH: `~/.local/bin` and, on an
+   Apple-silicon Mac, Homebrew. Not fnm, deno or `local.sh`; those need an
+   interactive shell.
 4. Seed the per-machine files (`~/.config/git/local`, `~/.config/shell/local.sh`)
    from their `*.example` templates — never overwriting an existing one.
 5. Best-effort install a Nerd Font (the `font-monaspice-nerd-font` Homebrew
@@ -149,10 +152,11 @@ The shell config is a set of POSIX-`sh` **fragments** that both bash and zsh
 source, so there's a single source of truth across shells:
 
 ```
+~/.zshenv                     # every zsh: zshenv.sh → path.sh, keeping PATH's order
 ~/.bashrc / ~/.zshrc          # per-machine (NOT in repo); one line sources ↓
   └─ ~/.config/shell/init.sh   # entrypoint — sources the fragments below
        ├─ env.sh     # XDG vars, EDITOR/VISUAL/PAGER
-       ├─ path.sh     # idempotent PATH building (path_prepend)
+       ├─ path.sh     # idempotent PATH building (path_prepend), Homebrew ahead of /usr/bin
        ├─ aliases.sh  # ls/grep/git/cd shortcuts, vim -> nvim
        ├─ tools.sh    # fnm, deno (shell-detected)
        ├─ prompt.sh   # starship (shell-detected, interactive only)
