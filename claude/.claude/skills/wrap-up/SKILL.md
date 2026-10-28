@@ -64,7 +64,11 @@ sh ${CLAUDE_SKILL_DIR}/ledger.sh returned 'branch feat/x (deleted after #12)'
 ```
 
 An item matches on the text before its trailing note, so copy it exactly. The
-ledger is append-only; never edit or delete it.
+note is the trailing parenthesis, so keep parentheses out of an item's name
+when you take it: `taken: branch x (machines)` records `branch x` with a note,
+and `returned: branch x (machines) (deleted after #4)` names
+`branch x (machines)`, which never matches it. The ledger is append-only; never
+edit or delete it.
 
 **A `/clear` starts a new session ID.** A hook carries the open items across
 into the new ledger, and `ledger.sh open` then prints a `before /clear:` line
