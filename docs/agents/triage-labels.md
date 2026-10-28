@@ -1,5 +1,16 @@
 # Triage Labels
 
+**Every label in the right-hand column exists in the tracker.** Before applying
+one, check `gh label list`; if it is missing, create it with the meaning below
+as its description, then apply it:
+
+```bash
+gh label create ready-for-agent --description "Fully specified, ready for an AFK agent"
+```
+
+Four of the five were documented here and never created until 2026-10-28, so
+issues got filed with no triage label at all.
+
 The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |
