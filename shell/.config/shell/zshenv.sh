@@ -4,5 +4,6 @@
 # venv or fnm activated since, and running path.sh again would reorder it.
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
-  *) . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh" ;;
+  *) [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh" ] &&
+       . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh" ;;
 esac
