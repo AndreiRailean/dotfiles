@@ -24,9 +24,13 @@ printf '#!/bin/sh\n' >"$T/brew/bin/brew"; chmod +x "$T/brew/bin/brew"
 NOBREW="$T/nobrew"
 
 # run <shell> <PATH before> [prefix]: source path.sh twice (idempotence) and
-# print PATH.
+# print PATH. keep: the same in the keep-order mode ~/.zshenv uses.
 run() {
   HOME="$H" PATH="$2" HOMEBREW_PREFIX="${3:-$NOBREW}" \
+    "$1" -c ". \"$PATHSH\"; . \"$PATHSH\"; printf '%s' \"\$PATH\""
+}
+keep() {
+  HOME="$H" PATH="$2" HOMEBREW_PREFIX="${3:-$NOBREW}" _path_keep_order=1 \
     "$1" -c ". \"$PATHSH\"; . \"$PATHSH\"; printf '%s' \"\$PATH\""
 }
 
@@ -71,11 +75,40 @@ for name in sh bash zsh; do
   got="$(run "$sh" "/opt/x" "$T/brew")"
   assert_eq "$got" "$H/.local/bin:$H/bin:/opt/x:$T/brew/bin:$T/brew/sbin" \
     "$name: with no /usr/bin, Homebrew goes last"
+  # The first /usr/bin is the one that counts.
+  got="$(run "$sh" "/usr/bin:$T/brew/bin:/x:/usr/bin" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/x:/usr/bin" \
+    "$name: Homebrew goes ahead of the first /usr/bin"
+  # With no /usr/bin, a Homebrew already on PATH stays where it is.
+  got="$(run "$sh" "$T/brew/bin:/opt/x" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:$T/brew/bin:/opt/x:$T/brew/sbin" \
+    "$name: with no /usr/bin, a Homebrew already there isn't moved"
+
+  # Keep-order mode, which ~/.zshenv uses: a clean start (a command over SSH)
+  # gets everything, in the same order a full run gives.
+  got="$(keep "$sh" "/usr/bin:/bin" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" \
+    "$name: keep-order on a clean PATH gives the full order"
+  # An inherited order is kept: nothing jumps the venv.
+  got="$(keep "$sh" "/venv/bin:$H/.local/bin:$H/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" "$T/brew")"
+  assert_eq "$got" "/venv/bin:$H/.local/bin:$H/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" \
+    "$name: keep-order leaves an inherited PATH as it is"
+  # ~/.local/bin already there (an earlier line of ~/.zshenv, say) still gets
+  # Homebrew: the SSH case this is for.
+  got="$(keep "$sh" "$H/.local/bin:/usr/bin:/bin" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" \
+    "$name: keep-order still adds Homebrew when ~/.local/bin is already there"
+
   # A prefix with no brew in it (a stale HOMEBREW_PREFIX) adds nothing.
   mkdir -p "$T/stale/bin"
   got="$(run "$sh" "/usr/bin:/bin" "$T/stale")"
   assert_eq "$got" "$H/.local/bin:$H/bin:/usr/bin:/bin" "$name: a prefix without brew is skipped"
 done
+
+# path_before with DIR and ANCHOR the same does nothing (HOMEBREW_PREFIX=/usr
+# would ask for it): it used to move /usr/bin to the end.
+got="$(PATH="/a:/usr/bin:/b" "$(command -v sh)" -c ". \"$PATHSH\" >/dev/null; PATH=/a:/usr/bin:/b; path_before /usr/bin /usr/bin; printf '%s' \"\$PATH\"")"
+assert_eq "$got" "/a:/usr/bin:/b" "path_before DIR DIR leaves PATH alone"
 
 # The default prefix, which a command over SSH relies on (HOMEBREW_PREFIX is
 # unset there). Only checkable where Homebrew really is at /opt/homebrew.

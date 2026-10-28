@@ -152,7 +152,7 @@ The shell config is a set of POSIX-`sh` **fragments** that both bash and zsh
 source, so there's a single source of truth across shells:
 
 ```
-~/.zshenv                     # every zsh: zshenv.sh → path.sh, unless PATH has it
+~/.zshenv                     # every zsh: zshenv.sh → path.sh, keeping PATH's order
 ~/.bashrc / ~/.zshrc          # per-machine (NOT in repo); one line sources ↓
   └─ ~/.config/shell/init.sh   # entrypoint — sources the fragments below
        ├─ env.sh     # XDG vars, EDITOR/VISUAL/PAGER

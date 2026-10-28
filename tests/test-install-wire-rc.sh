@@ -98,6 +98,11 @@ if command -v zsh >/dev/null 2>&1; then
   got="$(env -i HOME="$T/home" PATH="$inherited" HOMEBREW_PREFIX="$T/brew" \
     "$(command -v zsh)" -c 'printf %s "$PATH"')"
   assert_eq "$got" "$inherited" "a zsh that inherits the dotfiles PATH leaves it as it is"
+  # ~/.local/bin put on PATH before our line runs must not cost Homebrew.
+  got="$(env -i HOME="$T/home" PATH="$T/home/.local/bin:/usr/bin:/bin" HOMEBREW_PREFIX="$T/brew" \
+    "$(command -v zsh)" -c 'printf %s "$PATH"')"
+  assert_eq "$got" "$T/home/.local/bin:$T/brew/bin:/usr/bin:/bin" \
+    "a zsh that starts with ~/.local/bin but no Homebrew still gets Homebrew"
 else
   echo "  skip: zsh not installed"
 fi
