@@ -29,7 +29,9 @@ git -C <main checkout> merge --ff-only origin/main
   checkout is somewhere else.
 - `--ff-only` so this can never create a merge commit or rewrite anything. If
   it refuses, say so rather than forcing it.
-- If the main checkout is dirty, leave it alone and report that.
+- If the main checkout is dirty, leave it alone, report it and show the user
+  the diff. That holds even when the changes look identical to what just
+  merged: discarding them is the user's call, never yours.
 
 `ff-probe.sh` asks this question after a `gh pr merge` runs, but it cannot see a
 merge done in the web UI or one you are simply told about. That is why the rule
