@@ -25,6 +25,17 @@ path_prepend() {
   unset _pp
 }
 
+# Apple-silicon Homebrew. Its installer puts `brew shellenv` in ~/.zprofile,
+# which only a login shell reads, and path_helper demotes it there anyway.
+# ~/.zshenv sources this file too, so a command run over SSH gets brew's bash
+# and tools rather than Apple's /bin/bash 3.2. Before ~/.local/bin, which wins.
+_hb="${HOMEBREW_PREFIX:-/opt/homebrew}"
+if [ -x "$_hb/bin/brew" ]; then
+  path_prepend "$_hb/sbin"
+  path_prepend "$_hb/bin"
+fi
+unset _hb
+
 path_prepend "$HOME/bin"
 path_prepend "$HOME/.local/bin"
 

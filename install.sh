@@ -252,6 +252,25 @@ wire_shell_rc() {
 wire_shell_rc "$HOME/.bashrc"
 wire_shell_rc "$HOME/.zshrc"
 
+# ~/.zshenv is the one file every zsh reads, including the non-interactive one
+# that runs `ssh host 'cmd'`, which reads neither ~/.zshrc nor ~/.zprofile. So
+# a command over SSH to a Mac got /usr/bin:/bin:/usr/sbin:/sbin: Apple's bash
+# 3.2 for `env bash`, and nothing from Homebrew or ~/.local/bin. Sourcing
+# path.sh gives it the PATH an interactive shell builds. Created when zsh is
+# the login shell, as ~/.zshrc is.
+wire_zshenv() {
+  local rc="$HOME/.zshenv" marker="# >>> dotfiles (managed) >>>"
+  [ -e "$rc" ] || [ "${SHELL##*/}" = zsh ] || return 0
+  grep -qF "$marker" "$rc" 2>/dev/null && return 0
+  {
+    printf '\n%s\n' "$marker"
+    printf '%s\n' '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh"'
+    printf '%s\n' "# <<< dotfiles (managed) <<<"
+  } >>"$rc"
+  echo "Wired dotfiles PATH into $rc"
+}
+wire_zshenv
+
 # ── Seed per-machine files from templates (never overwrite) ──
 [ -f "$HOME/.config/git/local" ]  || { cp "$DOTFILES_DIR/git/.config/git/local.example"       "$HOME/.config/git/local";  echo "Created ~/.config/git/local — set your name/email"; }
 [ -f "$HOME/.config/shell/local.sh" ] || { cp "$DOTFILES_DIR/shell/.config/shell/local.sh.example" "$HOME/.config/shell/local.sh"; echo "Created ~/.config/shell/local.sh"; }
