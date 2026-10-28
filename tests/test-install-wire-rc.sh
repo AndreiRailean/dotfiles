@@ -68,30 +68,36 @@ run_zshenv /bin/bash
   || fail "bash login shell: absent ~/.zshenv left alone"
 
 run_zshenv /bin/zsh
-if grep -qF 'shell/path.sh' "$T/home/.zshenv" 2>/dev/null; then
-  pass "zsh login shell: missing ~/.zshenv is created, sourcing path.sh"
+if grep -qF 'shell/zshenv.sh' "$T/home/.zshenv" 2>/dev/null; then
+  pass "zsh login shell: missing ~/.zshenv is created, sourcing zshenv.sh"
 else
-  fail "zsh login shell: missing ~/.zshenv is created, sourcing path.sh"
+  fail "zsh login shell: missing ~/.zshenv is created, sourcing zshenv.sh"
 fi
 run_zshenv /bin/zsh
-assert_eq "$(grep -c 'shell/path.sh' "$T/home/.zshenv")" "1" "re-run does not duplicate the ~/.zshenv line"
+assert_eq "$(grep -c 'shell/zshenv.sh' "$T/home/.zshenv")" "1" "re-run does not duplicate the ~/.zshenv line"
 
 rm -rf "$T/home"; mkdir -p "$T/home"; echo 'export KEEP=1' >"$T/home/.zshenv"
 run_zshenv /bin/bash
 assert_contains "$(cat "$T/home/.zshenv")" "export KEEP=1" "an existing ~/.zshenv keeps its own lines"
-assert_contains "$(cat "$T/home/.zshenv")" "shell/path.sh" "an existing ~/.zshenv is wired whatever the login shell"
+assert_contains "$(cat "$T/home/.zshenv")" "shell/zshenv.sh" "an existing ~/.zshenv is wired whatever the login shell"
 
 # The point of it: a non-interactive zsh, as `ssh host 'cmd'` runs, gets
 # ~/.local/bin, which only ~/.zshrc used to add.
 if command -v zsh >/dev/null 2>&1; then
   mkdir -p "$T/home/.config/shell" "$T/home/.local/bin" "$T/brew/bin"
-  cp "$REPO/shell/.config/shell/path.sh" "$T/home/.config/shell/path.sh"
+  cp "$REPO/shell/.config/shell/path.sh" "$REPO/shell/.config/shell/zshenv.sh" "$T/home/.config/shell/"
   # A stand-in Homebrew, so a real /opt/homebrew on a Mac doesn't decide it.
   printf '#!/bin/sh\n' >"$T/brew/bin/brew"; chmod +x "$T/brew/bin/brew"
   got="$(env -i HOME="$T/home" PATH=/usr/bin:/bin HOMEBREW_PREFIX="$T/brew" \
     "$(command -v zsh)" -c 'printf %s "$PATH"')"
   assert_eq "$got" "$T/home/.local/bin:$T/brew/bin:/usr/bin:/bin" \
     "a non-interactive zsh gets path.sh's PATH, Homebrew included, from ~/.zshenv"
+  # A zsh started from a dotfiles shell keeps the PATH it inherited, in order:
+  # a venv activated since stays ahead of ~/.local/bin and brew.
+  inherited="/venv/bin:$T/home/.local/bin:$T/brew/bin:/usr/bin:/bin"
+  got="$(env -i HOME="$T/home" PATH="$inherited" HOMEBREW_PREFIX="$T/brew" \
+    "$(command -v zsh)" -c 'printf %s "$PATH"')"
+  assert_eq "$got" "$inherited" "a zsh that inherits the dotfiles PATH leaves it as it is"
 else
   echo "  skip: zsh not installed"
 fi

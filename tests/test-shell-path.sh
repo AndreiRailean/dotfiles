@@ -59,10 +59,32 @@ for name in sh bash zsh; do
   got="$(run "$sh" "/usr/bin:/bin:$T/brew/bin" "$T/brew")"
   assert_eq "$got" "$H/.local/bin:$H/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" \
     "$name: a demoted Homebrew is moved back ahead of /usr/bin"
+  # Only ahead of the system's dirs: brew's python and node mustn't jump a
+  # venv or fnm put ahead of it, which a child zsh would otherwise inherit and
+  # reorder through ~/.zshenv.
+  got="$(run "$sh" "/venv/bin:/fnm/bin:/usr/bin:/bin" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:/venv/bin:/fnm/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" \
+    "$name: Homebrew goes just ahead of /usr/bin, behind a venv and fnm"
+  got="$(run "$sh" "/venv/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:/venv/bin:$T/brew/bin:$T/brew/sbin:/usr/bin:/bin" \
+    "$name: a Homebrew already ahead of /usr/bin is left where it is"
+  got="$(run "$sh" "/opt/x" "$T/brew")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:/opt/x:$T/brew/bin:$T/brew/sbin" \
+    "$name: with no /usr/bin, Homebrew goes last"
   # A prefix with no brew in it (a stale HOMEBREW_PREFIX) adds nothing.
   mkdir -p "$T/stale/bin"
   got="$(run "$sh" "/usr/bin:/bin" "$T/stale")"
   assert_eq "$got" "$H/.local/bin:$H/bin:/usr/bin:/bin" "$name: a prefix without brew is skipped"
 done
+
+# The default prefix, which a command over SSH relies on (HOMEBREW_PREFIX is
+# unset there). Only checkable where Homebrew really is at /opt/homebrew.
+if [ -x /opt/homebrew/bin/brew ]; then
+  got="$(env -u HOMEBREW_PREFIX HOME="$H" PATH=/usr/bin:/bin sh -c ". \"$PATHSH\"; printf '%s' \"\$PATH\"")"
+  assert_eq "$got" "$H/.local/bin:$H/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin" \
+    "with HOMEBREW_PREFIX unset, /opt/homebrew is found"
+else
+  echo "  skip: no Homebrew at /opt/homebrew"
+fi
 
 finish

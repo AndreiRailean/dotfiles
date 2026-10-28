@@ -25,14 +25,37 @@ path_prepend() {
   unset _pp
 }
 
+# path_before DIR ANCHOR: make sure DIR comes before ANCHOR. If it doesn't,
+# DIR moves to just before ANCHOR, not to the front, so whatever was put ahead
+# of it (a venv, fnm, pyenv's shims) stays ahead. With no ANCHOR, DIR goes last.
+path_before() {
+  [ -d "$1" ] || return 0
+  case ":$PATH:" in *":$1:"*":$2:"*) return 0 ;; esac
+  _pb=":$PATH:"
+  while :; do
+    case "$_pb" in
+      *":$1:"*) _pb="${_pb%%:"$1":*}:${_pb#*:"$1":}" ;;
+      *) break ;;
+    esac
+  done
+  case "$_pb" in
+    *":$2:"*) _pb="${_pb%%:"$2":*}:$1:$2:${_pb#*:"$2":}" ;;
+    *)        _pb="$_pb$1:" ;;
+  esac
+  _pb="${_pb#:}"; _pb="${_pb%:}"
+  PATH="$_pb"
+  unset _pb
+}
+
 # Apple-silicon Homebrew. Its installer puts `brew shellenv` in ~/.zprofile,
 # which only a login shell reads, and path_helper demotes it there anyway.
 # ~/.zshenv sources this file too, so a command run over SSH gets brew's bash
-# and tools rather than Apple's /bin/bash 3.2. Before ~/.local/bin, which wins.
+# and tools rather than Apple's /bin/bash 3.2. Ahead of the system's dirs
+# only: brew carries python, node and ruby, which mustn't jump a venv or fnm.
 _hb="${HOMEBREW_PREFIX:-/opt/homebrew}"
 if [ -x "$_hb/bin/brew" ]; then
-  path_prepend "$_hb/sbin"
-  path_prepend "$_hb/bin"
+  path_before "$_hb/bin" /usr/bin
+  path_before "$_hb/sbin" /usr/bin
 fi
 unset _hb
 

@@ -255,16 +255,16 @@ wire_shell_rc "$HOME/.zshrc"
 # ~/.zshenv is the one file every zsh reads, including the non-interactive one
 # that runs `ssh host 'cmd'`, which reads neither ~/.zshrc nor ~/.zprofile. So
 # a command over SSH to a Mac got /usr/bin:/bin:/usr/sbin:/sbin: Apple's bash
-# 3.2 for `env bash`, and nothing from Homebrew or ~/.local/bin. Sourcing
-# path.sh gives it the PATH an interactive shell builds. Created when zsh is
-# the login shell, as ~/.zshrc is.
+# 3.2 for `env bash`, and nothing from Homebrew or ~/.local/bin. zshenv.sh
+# gives such a shell path.sh's PATH. Created when zsh is the login shell, as
+# ~/.zshrc is.
 wire_zshenv() {
   local rc="$HOME/.zshenv" marker="# >>> dotfiles (managed) >>>"
   [ -e "$rc" ] || [ "${SHELL##*/}" = zsh ] || return 0
   grep -qF "$marker" "$rc" 2>/dev/null && return 0
   {
     printf '\n%s\n' "$marker"
-    printf '%s\n' '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/path.sh"'
+    printf '%s\n' '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/shell/zshenv.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/shell/zshenv.sh"'
     printf '%s\n' "# <<< dotfiles (managed) <<<"
   } >>"$rc"
   echo "Wired dotfiles PATH into $rc"
