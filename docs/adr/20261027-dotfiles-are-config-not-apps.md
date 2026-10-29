@@ -84,3 +84,21 @@ the same everywhere.
   repo.
 - The herdr brew-service failure is fixed by deleting that step, not by
   repairing it.
+
+## Update, 2026-10-29
+
+The user may still run Claude Code on a Mac, and so work in its shell. The
+later decision is narrower than "no Macs": *work* development targets Linux,
+so setup and tooling for work repos don't have to run on macOS. That's
+recorded in the private machines repo as `20261029-work-dev-targets-linux`.
+
+Two things above change with it:
+
+- **Whether a Mac gets the dotfiles follows the rule in the Decision:** it
+  does if the user works in its shell. minirat already has them.
+- **The macOS branches stay.** The third Consequence no longer holds, and
+  dotfiles issue #46 drops "remove the macOS branches" from the migration.
+  Moving the *app* sections out of `install.sh` and `update.sh` still
+  applies to a Mac as much as to Linux. Mac-specific *config*, such as
+  `path.sh`'s Homebrew handling and the `~/.zshenv` hook from #48, is part
+  of the dotfiles.
