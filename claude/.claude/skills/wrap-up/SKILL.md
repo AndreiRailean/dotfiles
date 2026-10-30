@@ -166,8 +166,10 @@ reads "not fully merged" and is not true.
 - **The main checkout** (the first line of `git worktree list`): fast-forward
   it to origin's default branch, whoever merged what it is behind, since the
   next session starts from it and `--ff-only` cannot lose anything:
-  `git -C <main checkout> merge --ff-only origin/<default branch>`. Dirty, or
-  refused: leave it alone and show the user `git -C <main checkout> diff`.
+  `git -C <main checkout> merge --ff-only origin/<default branch>`. Only while
+  it has the default branch checked out: on any other branch the same command
+  moves that branch. Dirty, refused, or on another branch: leave it alone and
+  show the user `git -C <main checkout> status` and `diff`.
 - **Worktrees:** the one you are in belongs to whoever created it for you (a
   herdr worktree is herdr's). Remove a worktree the ledger names:
   `git worktree remove <path>`.
@@ -245,7 +247,7 @@ tree: 0 changes (git status --porcelain | wc -l, unfiltered) · HEAD: <branch> @
 ledger: <n> taken, <n> returned, <n> open (each named, with why) | not kept
 background: 0 · servers: stopped | left for review of <what> · others reported: <n>
 branches deleted: <names> · worktrees: <n> · stash: <n>, <n> mine
-PRs in the ledger: <number: state, checks> · main checkout: <sha> = origin/<default> | dirty, diff shown
+PRs in the ledger: <number: state, checks> · main checkout: <sha> = origin/<default> | dirty or on <branch>, status shown
 signals: <n> (<what was examined>) · findings: <n>
 not captured: <each finding and item, with its suggested capture>
 left running on purpose: <what, and why>
