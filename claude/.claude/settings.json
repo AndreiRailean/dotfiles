@@ -5,7 +5,11 @@
     "pr": ""
   },
   "permissions": {
-    "defaultMode": "auto"
+    "defaultMode": "auto",
+    "allow": [
+      "Bash(gh issue comment:*)",
+      "Bash(gh pr comment:*)"
+    ]
   },
   "model": "opus",
   "skillOverrides": {
