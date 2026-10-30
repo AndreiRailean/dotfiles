@@ -161,8 +161,13 @@ git stash list
 ref, and until a prune GitHub's deletion on merge is invisible, so the refusal
 reads "not fully merged" and is not true.
 
-- **Branches and the main checkout:** the global `CLAUDE.md`, "After a PR
-  merges", has the rules, applied to branches in the ledger.
+- **Branches:** the global `CLAUDE.md`, "After a PR merges", has the rules,
+  applied to branches in the ledger.
+- **The main checkout** (the first line of `git worktree list`): fast-forward
+  it to origin's default branch, whoever merged what it is behind, since the
+  next session starts from it and `--ff-only` cannot lose anything:
+  `git -C <main checkout> merge --ff-only origin/<default branch>`. Dirty, or
+  refused: leave it alone and show the user `git -C <main checkout> diff`.
 - **Worktrees:** the one you are in belongs to whoever created it for you (a
   herdr worktree is herdr's). Remove a worktree the ledger names:
   `git worktree remove <path>`.
@@ -175,7 +180,8 @@ reads "not fully merged" and is not true.
 
 **Done when:** `git status --porcelain` prints nothing, **read unfiltered**; no
 branch, worktree or stash entry from the ledger remains unless the report says
-why; and every PR in the ledger is merged or reported with its checks.
+why; the main checkout is at origin's default branch, or its diff is in the
+report; and every PR in the ledger is merged or reported with its checks.
 
 ## 5. What would be forgotten
 
@@ -239,7 +245,7 @@ tree: 0 changes (git status --porcelain | wc -l, unfiltered) · HEAD: <branch> @
 ledger: <n> taken, <n> returned, <n> open (each named, with why) | not kept
 background: 0 · servers: stopped | left for review of <what> · others reported: <n>
 branches deleted: <names> · worktrees: <n> · stash: <n>, <n> mine
-PRs in the ledger: <number: state, checks> · main checkout: <sha> | untouched, why
+PRs in the ledger: <number: state, checks> · main checkout: <sha> = origin/<default> | dirty, diff shown
 signals: <n> (<what was examined>) · findings: <n>
 not captured: <each finding and item, with its suggested capture>
 left running on purpose: <what, and why>

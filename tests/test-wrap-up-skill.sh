@@ -373,6 +373,8 @@ assert_contains "$ends" 'ledger-probe.sh' "and runs it at SessionEnd, for the /c
 # The user's rule: /clear is safe only after a wrap-up.
 assert_contains "$desc" "before a /clear" "description triggers before a /clear"
 assert_contains "$body" "/clear: safe | not yet" "the report says whether a /clear is safe"
+assert_contains "$body" "whoever merged what it is behind" "the main checkout is fast-forwarded whoever merged"
+assert_not_contains "$body" "untouched, why" "and the report offers no reason to leave it behind"
 assert_contains "$body" '`not captured:` is empty' "and a finding still waiting on the user makes it not yet"
 assert_contains "$body" "Before a \`/clear\`, end its report with this file's" "the hand-over keeps the /clear verdict"
 
